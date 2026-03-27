@@ -1,9 +1,98 @@
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowRight, Code, Camera, Mail, Github, Linkedin, Instagram, Aperture, Terminal, Layers, User, X, ExternalLink, Database, Cpu, Globe, Smartphone, Server, Upload, Trash2, LogIn, LogOut, Settings } from "lucide-react";
-import React, { useState, useMemo, ReactNode, useEffect } from "react";
+import React, { useState, useMemo, ReactNode, useEffect, Component } from "react";
 import { cn } from "@/lib/utils";
 import { db } from "./firebase";
-import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, serverTimestamp, getDocFromServer } from "firebase/firestore";
+import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "firebase/auth";
+import { auth } from "./firebase";
+
+// --- Firestore Error Handling ---
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: any[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+// --- Error Boundary ---
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean, error: any }> {
+  state = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    const { hasError, error } = this.state;
+    if (hasError) {
+      let displayMessage = "Something went wrong.";
+      try {
+        const parsed = JSON.parse(error.message);
+        if (parsed.error && parsed.operationType) {
+          displayMessage = `Database Error (${parsed.operationType}): ${parsed.error}. Please check security rules.`;
+        }
+      } catch (e) {
+        displayMessage = error.message || String(error);
+      }
+
+      return (
+        <div className="min-h-screen bg-black text-white flex items-center justify-center p-12 text-center">
+          <div className="max-w-md p-8 bg-red-900/20 border border-red-500/30 rounded-3xl">
+            <h2 className="text-2xl font-bold mb-4">Application Error</h2>
+            <p className="text-slate-400 mb-6">{displayMessage}</p>
+            <Button onClick={() => window.location.reload()}>Reload Application</Button>
+          </div>
+        </div>
+      );
+    }
+
+    return (this as any).props.children;
+  }
+}
 
 // --- Types ---
 type Mode = "main" | "photographer" | "admin";
@@ -442,7 +531,8 @@ const PhotographerPortfolio = ({ onBack, onAdmin }: { onBack: () => void, onAdmi
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, "photos"), orderBy("createdAt", "desc"));
+    const path = "photos";
+    const q = query(collection(db, path), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedPhotos = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -485,6 +575,8 @@ const PhotographerPortfolio = ({ onBack, onAdmin }: { onBack: () => void, onAdmi
         ]);
       }
       setIsLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
     });
 
     return () => unsubscribe();
@@ -632,7 +724,7 @@ const PhotographerPortfolio = ({ onBack, onAdmin }: { onBack: () => void, onAdmi
 
 const AdminPanel = ({ onBack }: { onBack: () => void }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loginData, setLoginData] = useState({ username: "", password: "" });
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [photos, setPhotos] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
@@ -644,20 +736,50 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
   const [file, setFile] = useState<File | null>(null);
 
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setIsLoggedIn(true);
+      } else {
+        setIsLoggedIn(false);
+      }
+      setIsAuthReady(true);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
     if (!isLoggedIn) return;
-    const q = query(collection(db, "photos"), orderBy("createdAt", "desc"));
+    const path = "photos";
+    const q = query(collection(db, path), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setPhotos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
     });
     return () => unsubscribe();
   }, [isLoggedIn]);
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (loginData.username === "alvi" && loginData.password === "123456") {
+  const handleLogin = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
       setIsLoggedIn(true);
-    } else {
-      alert("Invalid credentials");
+    } catch (err: any) {
+      console.error("Firebase Auth Error:", err);
+      if (err.code === 'auth/admin-restricted-operation') {
+        alert("Google Login is restricted. Please ensure Google Sign-in is enabled in your Firebase Console.");
+      } else {
+        alert(`Failed to authenticate with Google: ${err.message}`);
+      }
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setIsLoggedIn(false);
+    } catch (err) {
+      console.error("Logout Error:", err);
     }
   };
 
@@ -670,6 +792,11 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
 
     setIsSaving(true);
     try {
+      const isVercel = window.location.hostname.includes("vercel.app");
+      if (isVercel) {
+        throw new Error("Direct upload is not supported on Vercel yet. Please use the AI Studio preview to upload photos.");
+      }
+
       // 1. Upload to Hostinger via backend
       const uploadData = new FormData();
       uploadData.append("photo", file);
@@ -679,22 +806,43 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
         body: uploadData
       });
 
+      const contentType = uploadRes.headers.get("content-type");
+      
       if (!uploadRes.ok) {
-        const err = await uploadRes.json();
-        throw new Error(err.error || "Upload failed");
+        let errorMessage = "Upload failed";
+        if (contentType && contentType.includes("application/json")) {
+          const err = await uploadRes.json();
+          errorMessage = err.error || errorMessage;
+        } else {
+          const text = await uploadRes.text();
+          console.error("Server returned non-JSON error:", text);
+          errorMessage = `Server error (${uploadRes.status}). The server might not be running correctly.`;
+        }
+        throw new Error(errorMessage);
+      }
+
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await uploadRes.text();
+        console.error("Expected JSON but got:", text);
+        throw new Error("Invalid server response format. Expected JSON.");
       }
 
       const { url } = await uploadRes.json();
 
       // 2. Save metadata to Firestore
-      await addDoc(collection(db, "photos"), {
-        src: url,
-        title: formData.title,
-        category: formData.category,
-        event: formData.event,
-        height: formData.height,
-        createdAt: serverTimestamp()
-      });
+      const path = "photos";
+      try {
+        await addDoc(collection(db, path), {
+          src: url,
+          title: formData.title,
+          category: formData.category,
+          event: formData.event,
+          height: formData.height,
+          createdAt: serverTimestamp()
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.CREATE, path);
+      }
 
       alert("Photo uploaded and saved successfully!");
       setFormData({ title: "", category: "", event: "Portraits", height: "h-[400px]" });
@@ -709,10 +857,11 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure?")) return;
+    const path = `photos/${id}`;
     try {
       await deleteDoc(doc(db, "photos", id));
-    } catch (err) {
-      console.error("Error deleting photo:", err);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   };
 
@@ -728,34 +877,25 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
             <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center text-cyan-400 mb-4">
               <Settings className="w-8 h-8" />
             </div>
-            <h1 className="text-2xl font-bold text-slate-100">Admin Login</h1>
-            <p className="text-slate-500 text-sm mt-2">Enter your credentials to manage gallery</p>
+            <h1 className="text-2xl font-bold text-slate-100">Admin Access</h1>
+            <p className="text-slate-500 text-sm mt-2">Sign in with Google to manage your gallery</p>
           </div>
           
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Username</label>
-              <input 
-                type="text" 
-                value={loginData.username}
-                onChange={(e) => setLoginData({...loginData, username: e.target.value})}
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors text-white"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Password</label>
-              <input 
-                type="password" 
-                value={loginData.password}
-                onChange={(e) => setLoginData({...loginData, password: e.target.value})}
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors text-white"
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full mt-4" icon={LogIn}>Login</Button>
-            <button type="button" onClick={onBack} className="w-full text-sm text-slate-500 hover:text-slate-300 transition-colors mt-2">Back to Portfolio</button>
-          </form>
+          <div className="space-y-4">
+            <Button onClick={handleLogin} className="w-full" icon={LogIn}>
+              Sign in with Google
+            </Button>
+            <button type="button" onClick={onBack} className="w-full text-sm text-slate-500 hover:text-slate-300 transition-colors mt-2">
+              Back to Portfolio
+            </button>
+          </div>
+          
+          <div className="mt-8 pt-6 border-t border-white/5">
+            <p className="text-[10px] text-slate-600 uppercase tracking-widest text-center leading-relaxed">
+              Only authorized administrators can access this panel. <br/>
+              Unauthorized access attempts are logged.
+            </p>
+          </div>
         </motion.div>
       </div>
     );
@@ -776,7 +916,7 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
               <Database className="w-4 h-4" />
               <span className="text-sm font-semibold">Firebase Connected</span>
             </div>
-            <button onClick={() => setIsLoggedIn(false)} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 transition-colors">
+            <button onClick={handleLogout} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 transition-colors">
               <LogOut className="w-5 h-5" />
             </button>
           </div>
@@ -906,11 +1046,27 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
 export default function App() {
   const [mode, setMode] = useState<Mode>("main");
 
+  // Test Firestore connection
+  useEffect(() => {
+    async function testConnection() {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error) {
+        if(error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration. The client is offline.");
+        }
+      }
+    }
+    testConnection();
+  }, []);
+
   return (
-    <main>
-      {mode === "main" && <MainPortfolio onSwitchMode={() => setMode("photographer")} />}
-      {mode === "photographer" && <PhotographerPortfolio onBack={() => setMode("main")} onAdmin={() => setMode("admin")} />}
-      {mode === "admin" && <AdminPanel onBack={() => setMode("photographer")} />}
-    </main>
+    <ErrorBoundary>
+      <main>
+        {mode === "main" && <MainPortfolio onSwitchMode={() => setMode("photographer")} />}
+        {mode === "photographer" && <PhotographerPortfolio onBack={() => setMode("main")} onAdmin={() => setMode("admin")} />}
+        {mode === "admin" && <AdminPanel onBack={() => setMode("photographer")} />}
+      </main>
+    </ErrorBoundary>
   );
 }

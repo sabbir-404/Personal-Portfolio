@@ -22,6 +22,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return isAuthenticated() && 
+             request.auth.token.email == "SABBIRISLAMALVI070800@gmail.com" &&
+             request.auth.token.email_verified == true;
+    }
+
     // Domain Validators
     function isValidPhoto(data) {
       return data.src is string && data.src.size() > 0 &&
@@ -33,7 +39,9 @@ service cloud.firestore {
 
     match /photos/{photoId} {
       allow read: if true; // Publicly readable for the portfolio
-      allow create, update, delete: if isAuthenticated(); // Only authenticated admins can modify
+      allow create: if isAdmin() && isValidPhoto(request.resource.data);
+      allow update: if isAdmin() && isValidPhoto(request.resource.data);
+      allow delete: if isAdmin();
     }
   }
 }
