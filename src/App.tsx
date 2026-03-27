@@ -636,12 +636,12 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
   const [photos, setPhotos] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
-    src: "",
     title: "",
     category: "",
     event: "Portraits",
     height: "h-[400px]"
   });
+  const [file, setFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -663,19 +663,45 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
 
   const handleAddPhoto = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.src) return;
+    if (!file) {
+      alert("Please select a photo file.");
+      return;
+    }
 
     setIsSaving(true);
     try {
+      // 1. Upload to Hostinger via backend
+      const uploadData = new FormData();
+      uploadData.append("photo", file);
+      
+      const uploadRes = await fetch("/api/upload", {
+        method: "POST",
+        body: uploadData
+      });
+
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json();
+        throw new Error(err.error || "Upload failed");
+      }
+
+      const { url } = await uploadRes.json();
+
+      // 2. Save metadata to Firestore
       await addDoc(collection(db, "photos"), {
-        ...formData,
+        src: url,
+        title: formData.title,
+        category: formData.category,
+        event: formData.event,
+        height: formData.height,
         createdAt: serverTimestamp()
       });
-      alert("Photo added successfully!");
-      setFormData({ src: "", title: "", category: "", event: "Portraits", height: "h-[400px]" });
+
+      alert("Photo uploaded and saved successfully!");
+      setFormData({ title: "", category: "", event: "Portraits", height: "h-[400px]" });
+      setFile(null);
     } catch (err) {
       console.error("Error adding photo:", err);
-      alert("Failed to add photo.");
+      alert(`Failed to add photo: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsSaving(false);
     }
@@ -761,21 +787,18 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
           <div className="lg:col-span-1">
             <div className="bg-[#111] border border-white/5 rounded-3xl p-8 sticky top-8">
               <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
-                <Upload className="w-5 h-5 text-cyan-500" /> Add New Photo
+                <Upload className="w-5 h-5 text-cyan-500" /> Upload New Photo
               </h2>
               <p className="text-xs text-slate-500 mb-6 leading-relaxed">
-                1. Upload your photo to Hostinger File Manager.<br/>
-                2. Copy the public URL (e.g. https://yourdomain.com/gallery/photo.jpg).<br/>
-                3. Paste the URL below to add it to your portfolio.
+                Choose a photo from your device. It will be uploaded to your Hostinger storage via FTP and its details will be saved in Firebase.
               </p>
               <form onSubmit={handleAddPhoto} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Image URL (from Hostinger)</label>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Photo File</label>
                   <input 
-                    type="url" 
-                    placeholder="https://wheat-panther-882734.hostingersite.com/gallery/..."
-                    value={formData.src}
-                    onChange={(e) => setFormData({...formData, src: e.target.value})}
+                    type="file" 
+                    accept="image/*"
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
                     className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors"
                     required
                   />
@@ -836,7 +859,7 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
                   disabled={isSaving}
                   icon={isSaving ? null : Upload}
                 >
-                  {isSaving ? "Saving..." : "Add to Gallery"}
+                  {isSaving ? "Uploading..." : "Upload & Save"}
                 </Button>
               </form>
             </div>
