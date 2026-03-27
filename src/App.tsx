@@ -1,10 +1,10 @@
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowRight, Code, Camera, Mail, Github, Linkedin, Instagram, Aperture, Terminal, Layers, User, X, ExternalLink, Database, Cpu, Globe, Smartphone, Server } from "lucide-react";
-import { useState, useMemo, ReactNode } from "react";
+import { ArrowRight, Code, Camera, Mail, Github, Linkedin, Instagram, Aperture, Terminal, Layers, User, X, ExternalLink, Database, Cpu, Globe, Smartphone, Server, Upload, Trash2, LogIn, LogOut, Settings } from "lucide-react";
+import React, { useState, useMemo, ReactNode, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
 // --- Types ---
-type Mode = "main" | "photographer";
+type Mode = "main" | "photographer" | "admin";
 
 interface Project {
   id: number;
@@ -426,7 +426,73 @@ const MainPortfolio = ({ onSwitchMode }: { onSwitchMode: () => void }) => {
 
 // --- Photographer Portfolio ---
 
-const PhotographerPortfolio = ({ onBack }: { onBack: () => void }) => {
+interface Photo {
+  src: string;
+  title: string;
+  category: string;
+  event: string;
+  height: string;
+}
+
+const PhotographerPortfolio = ({ onBack, onAdmin }: { onBack: () => void, onAdmin: () => void }) => {
+  const [activeEvent, setActiveEvent] = useState("All");
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/photos")
+      .then(res => res.json())
+      .then(data => {
+        if (data.length > 0) {
+          setPhotos(data);
+        } else {
+          // Fallback to sample photos if none uploaded yet
+          setPhotos([
+            { 
+              src: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=800&auto=format&fit=crop", 
+              title: "Grand Opening Gala", 
+              category: "Events", 
+              event: "Corporate",
+              height: "h-[400px]" 
+            },
+            { 
+              src: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=800&auto=format&fit=crop", 
+              title: "Studio Session", 
+              category: "Portrait", 
+              event: "Portraits",
+              height: "h-[500px]" 
+            },
+            { 
+              src: "https://images.unsplash.com/photo-1469334031218-e382a71b716b?q=80&w=800&auto=format&fit=crop", 
+              title: "Street Style", 
+              category: "Street", 
+              event: "Urban",
+              height: "h-[350px]" 
+            },
+            { 
+              src: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?q=80&w=800&auto=format&fit=crop", 
+              title: "Night Horizon", 
+              category: "Landscape", 
+              event: "Nature",
+              height: "h-[450px]" 
+            }
+          ]);
+        }
+        setIsLoading(false);
+      })
+      .catch(err => {
+        console.error("Failed to fetch photos:", err);
+        setIsLoading(false);
+      });
+  }, []);
+
+  const filteredPhotos = useMemo(() => {
+    if (activeEvent === "All") return photos;
+    return photos.filter(p => p.event === activeEvent);
+  }, [activeEvent, photos]);
+
+  const eventFilters = ["All", "Corporate", "Portraits", "Urban", "Nature"];
+
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-orange-500/30">
        {/* Nav */}
@@ -439,6 +505,9 @@ const PhotographerPortfolio = ({ onBack }: { onBack: () => void }) => {
             <span className="font-medium tracking-widest uppercase text-sm">Sabbir Islam Alvi</span>
           </div>
           <div className="flex items-center gap-6">
+             <button onClick={onAdmin} className="text-sm font-medium text-white/40 hover:text-white transition-colors">
+                Admin
+             </button>
              <button onClick={onBack} className="text-sm font-medium text-white/70 hover:text-white transition-colors">
                 Back to Main
              </button>
@@ -474,34 +543,48 @@ const PhotographerPortfolio = ({ onBack }: { onBack: () => void }) => {
 
       {/* Gallery Grid */}
       <Section>
-        <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">
-           {[
-             { src: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=800&auto=format&fit=crop", title: "Corporate Event", cat: "Events", height: "h-[400px]" },
-             { src: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=800&auto=format&fit=crop", title: "Portrait Session", cat: "Portrait", height: "h-[500px]" },
-             { src: "https://images.unsplash.com/photo-1469334031218-e382a71b716b?q=80&w=800&auto=format&fit=crop", title: "Urban Life", cat: "Street", height: "h-[350px]" },
-             { src: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?q=80&w=800&auto=format&fit=crop", title: "City Lights", cat: "Landscape", height: "h-[450px]" },
-             { src: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=800&auto=format&fit=crop", title: "Concert Night", cat: "Events", height: "h-[600px]" },
-             { src: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=800&auto=format&fit=crop", title: "Studio Headshot", cat: "Portrait", height: "h-[400px]" },
-             { src: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=800&auto=format&fit=crop", title: "Nature's Calm", cat: "Landscape", height: "h-[550px]" },
-             { src: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop", title: "Vintage Camera", cat: "Still Life", height: "h-[300px]" },
-           ].map((item, i) => (
-             <motion.div 
-               key={i}
-               initial={{ opacity: 0, y: 20 }}
-               whileInView={{ opacity: 1, y: 0 }}
-               viewport={{ once: true }}
-               transition={{ delay: i * 0.1 }}
-               whileHover={{ scale: 1.02 }}
-               className={cn("group relative overflow-hidden rounded-2xl bg-slate-900 cursor-pointer break-inside-avoid mb-6", item.height)}
-             >
-               <img src={item.src} alt={item.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
-               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
-                 <p className="text-orange-400 text-xs uppercase tracking-widest mb-1 font-bold">{item.cat}</p>
-                 <h3 className="text-xl font-medium text-white">{item.title}</h3>
-               </div>
-             </motion.div>
-           ))}
+        <div className="flex flex-col items-center mb-16">
+          <h2 className="text-3xl font-serif italic mb-8">Gallery</h2>
+          <div className="flex flex-wrap justify-center gap-3">
+            {eventFilters.map(filter => (
+              <button
+                key={filter}
+                onClick={() => setActiveEvent(filter)}
+                className={cn(
+                  "px-6 py-2 rounded-full text-xs uppercase tracking-widest font-medium transition-all duration-300 border",
+                  activeEvent === filter 
+                    ? "bg-white text-black border-white" 
+                    : "bg-transparent text-white/50 border-white/10 hover:border-white/30"
+                )}
+              >
+                {filter}
+              </button>
+            ))}
+          </div>
         </div>
+
+        <motion.div layout className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">
+          <AnimatePresence mode="popLayout">
+            {filteredPhotos.map((item, i) => (
+              <motion.div 
+                key={item.src}
+                layout
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.4 }}
+                whileHover={{ scale: 1.02 }}
+                className={cn("group relative overflow-hidden rounded-2xl bg-slate-900 cursor-pointer break-inside-avoid mb-6", item.height)}
+              >
+                <img src={item.src} alt={item.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
+                  <p className="text-orange-400 text-xs uppercase tracking-widest mb-1 font-bold">{item.category}</p>
+                  <h3 className="text-xl font-medium text-white">{item.title}</h3>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </motion.div>
       </Section>
 
       {/* Achievements / Events List */}
@@ -541,6 +624,199 @@ const PhotographerPortfolio = ({ onBack }: { onBack: () => void }) => {
   );
 };
 
+// --- Admin Panel ---
+
+const AdminPanel = ({ onBack }: { onBack: () => void }) => {
+  const [photos, setPhotos] = useState<any[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [formData, setFormData] = useState({
+    title: "",
+    category: "",
+    event: "Portraits",
+    height: "h-[400px]"
+  });
+  const [file, setFile] = useState<File | null>(null);
+
+  const fetchPhotos = () => {
+    fetch("/api/photos")
+      .then(res => res.json())
+      .then(setPhotos);
+  };
+
+  useEffect(() => {
+    fetchPhotos();
+  }, []);
+
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!file) return;
+
+    setIsUploading(true);
+    const data = new FormData();
+    data.append("photo", file);
+    data.append("title", formData.title);
+    data.append("category", formData.category);
+    data.append("event", formData.event);
+    data.append("height", formData.height);
+
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: data
+      });
+      if (res.ok) {
+        alert("Uploaded successfully to Hostinger!");
+        setFormData({ title: "", category: "", event: "Portraits", height: "h-[400px]" });
+        setFile(null);
+        fetchPhotos();
+      } else {
+        const err = await res.json();
+        alert(`Upload failed: ${err.error}`);
+      }
+    } catch (err) {
+      alert("Upload failed. Check console.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Are you sure?")) return;
+    await fetch(`/api/photos/${id}`, { method: "DELETE" });
+    fetchPhotos();
+  };
+
+  return (
+    <div className="min-h-screen bg-[#0a0a0a] text-slate-200 p-8">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex items-center justify-between mb-12">
+          <div className="flex items-center gap-4">
+            <button onClick={onBack} className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors">
+              <ArrowRight className="w-5 h-5 rotate-180" />
+            </button>
+            <h1 className="text-3xl font-bold tracking-tight">Gallery Admin</h1>
+          </div>
+          <div className="flex items-center gap-2 text-cyan-400 bg-cyan-500/10 px-4 py-2 rounded-full border border-cyan-500/20">
+            <Database className="w-4 h-4" />
+            <span className="text-sm font-semibold">Hostinger Storage Connected</span>
+          </div>
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-12">
+          {/* Upload Form */}
+          <div className="lg:col-span-1">
+            <div className="bg-[#111] border border-white/5 rounded-3xl p-8 sticky top-8">
+              <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+                <Upload className="w-5 h-5 text-cyan-500" /> Upload New Photo
+              </h2>
+              <form onSubmit={handleUpload} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Photo File</label>
+                  <input 
+                    type="file" 
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Title</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Sunset at Beach"
+                    value={formData.title}
+                    onChange={(e) => setFormData({...formData, title: e.target.value})}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Category</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Landscape"
+                    value={formData.category}
+                    onChange={(e) => setFormData({...formData, category: e.target.value})}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Event</label>
+                    <select 
+                      value={formData.event}
+                      onChange={(e) => setFormData({...formData, event: e.target.value})}
+                      className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors"
+                    >
+                      <option>Portraits</option>
+                      <option>Corporate</option>
+                      <option>Urban</option>
+                      <option>Nature</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Display Height</label>
+                    <select 
+                      value={formData.height}
+                      onChange={(e) => setFormData({...formData, height: e.target.value})}
+                      className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors"
+                    >
+                      <option value="h-[300px]">Short</option>
+                      <option value="h-[400px]">Medium</option>
+                      <option value="h-[500px]">Tall</option>
+                      <option value="h-[600px]">Extra Tall</option>
+                    </select>
+                  </div>
+                </div>
+                <Button 
+                  type="submit" 
+                  className="w-full mt-4" 
+                  disabled={isUploading}
+                  icon={isUploading ? null : Upload}
+                >
+                  {isUploading ? "Uploading to Hostinger..." : "Upload Photo"}
+                </Button>
+              </form>
+            </div>
+          </div>
+
+          {/* Manage Photos */}
+          <div className="lg:col-span-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {photos.map((photo) => (
+                <div key={photo.id} className="bg-[#111] border border-white/5 rounded-3xl overflow-hidden group">
+                  <div className="relative h-48">
+                    <img src={photo.src} alt={photo.title} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
+                    <button 
+                      onClick={() => handleDelete(photo.id)}
+                      className="absolute top-4 right-4 p-2 rounded-full bg-red-500/20 text-red-500 border border-red-500/30 hover:bg-red-500 hover:text-white transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="p-6">
+                    <h3 className="font-semibold text-slate-100 mb-1">{photo.title}</h3>
+                    <div className="flex gap-2">
+                      <span className="text-[10px] uppercase tracking-wider font-bold text-cyan-500 bg-cyan-500/10 px-2 py-0.5 rounded">{photo.category}</span>
+                      <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 bg-white/5 px-2 py-0.5 rounded">{photo.event}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {photos.length === 0 && (
+                <div className="col-span-full py-20 text-center border-2 border-dashed border-white/5 rounded-3xl text-slate-500">
+                  No photos uploaded yet.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- Main App ---
 
 export default function App() {
@@ -549,7 +825,8 @@ export default function App() {
   return (
     <main>
       {mode === "main" && <MainPortfolio onSwitchMode={() => setMode("photographer")} />}
-      {mode === "photographer" && <PhotographerPortfolio onBack={() => setMode("main")} />}
+      {mode === "photographer" && <PhotographerPortfolio onBack={() => setMode("main")} onAdmin={() => setMode("admin")} />}
+      {mode === "admin" && <AdminPanel onBack={() => setMode("photographer")} />}
     </main>
   );
 }
