@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: photos
+    // Document ID: auto-generated
+    // Fields:
+    //   - src: string (required) - public URL
+    //   - title: string (required) - photo title
+    //   - category: string (required) - category (e.g. Portrait)
+    //   - event: string (required) - event type (e.g. Corporate)
+    //   - height: string (required) - display height class (e.g. h-[400px])
+    //   - createdAt: string (optional) - timestamp
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Domain Validators
+    function isValidPhoto(data) {
+      return data.src is string && data.src.size() > 0 &&
+             data.title is string && data.title.size() > 0 &&
+             data.category is string && data.category.size() > 0 &&
+             data.event is string && data.event.size() > 0 &&
+             data.height is string && data.height.size() > 0;
+    }
+
+    match /photos/{photoId} {
+      allow read: if true; // Publicly readable for the portfolio
+      allow create, update, delete: if isAuthenticated(); // Only authenticated admins can modify
+    }
+  }
+}

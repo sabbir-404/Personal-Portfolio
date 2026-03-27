@@ -2,6 +2,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { ArrowRight, Code, Camera, Mail, Github, Linkedin, Instagram, Aperture, Terminal, Layers, User, X, ExternalLink, Database, Cpu, Globe, Smartphone, Server, Upload, Trash2, LogIn, LogOut, Settings } from "lucide-react";
 import React, { useState, useMemo, ReactNode, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { db } from "./firebase";
+import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
 
 // --- Types ---
 type Mode = "main" | "photographer" | "admin";
@@ -440,50 +442,52 @@ const PhotographerPortfolio = ({ onBack, onAdmin }: { onBack: () => void, onAdmi
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/photos")
-      .then(res => res.json())
-      .then(data => {
-        if (data.length > 0) {
-          setPhotos(data);
-        } else {
-          // Fallback to sample photos if none uploaded yet
-          setPhotos([
-            { 
-              src: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=800&auto=format&fit=crop", 
-              title: "Grand Opening Gala", 
-              category: "Events", 
-              event: "Corporate",
-              height: "h-[400px]" 
-            },
-            { 
-              src: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=800&auto=format&fit=crop", 
-              title: "Studio Session", 
-              category: "Portrait", 
-              event: "Portraits",
-              height: "h-[500px]" 
-            },
-            { 
-              src: "https://images.unsplash.com/photo-1469334031218-e382a71b716b?q=80&w=800&auto=format&fit=crop", 
-              title: "Street Style", 
-              category: "Street", 
-              event: "Urban",
-              height: "h-[350px]" 
-            },
-            { 
-              src: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?q=80&w=800&auto=format&fit=crop", 
-              title: "Night Horizon", 
-              category: "Landscape", 
-              event: "Nature",
-              height: "h-[450px]" 
-            }
-          ]);
-        }
-        setIsLoading(false);
-      })
-      .catch(err => {
-        console.error("Failed to fetch photos:", err);
-        setIsLoading(false);
-      });
+    const q = query(collection(db, "photos"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedPhotos = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as any[];
+      
+      if (fetchedPhotos.length > 0) {
+        setPhotos(fetchedPhotos);
+      } else {
+        // Fallback to sample photos if none uploaded yet
+        setPhotos([
+          { 
+            src: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=800&auto=format&fit=crop", 
+            title: "Grand Opening Gala", 
+            category: "Events", 
+            event: "Corporate",
+            height: "h-[400px]" 
+          },
+          { 
+            src: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=800&auto=format&fit=crop", 
+            title: "Studio Session", 
+            category: "Portrait", 
+            event: "Portraits",
+            height: "h-[500px]" 
+          },
+          { 
+            src: "https://images.unsplash.com/photo-1469334031218-e382a71b716b?q=80&w=800&auto=format&fit=crop", 
+            title: "Street Style", 
+            category: "Street", 
+            event: "Urban",
+            height: "h-[350px]" 
+          },
+          { 
+            src: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?q=80&w=800&auto=format&fit=crop", 
+            title: "Night Horizon", 
+            category: "Landscape", 
+            event: "Nature",
+            height: "h-[450px]" 
+          }
+        ]);
+      }
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const filteredPhotos = useMemo(() => {
@@ -627,64 +631,109 @@ const PhotographerPortfolio = ({ onBack, onAdmin }: { onBack: () => void, onAdmi
 // --- Admin Panel ---
 
 const AdminPanel = ({ onBack }: { onBack: () => void }) => {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loginData, setLoginData] = useState({ username: "", password: "" });
   const [photos, setPhotos] = useState<any[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
+    src: "",
     title: "",
     category: "",
     event: "Portraits",
     height: "h-[400px]"
   });
-  const [file, setFile] = useState<File | null>(null);
-
-  const fetchPhotos = () => {
-    fetch("/api/photos")
-      .then(res => res.json())
-      .then(setPhotos);
-  };
 
   useEffect(() => {
-    fetchPhotos();
-  }, []);
+    if (!isLoggedIn) return;
+    const q = query(collection(db, "photos"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setPhotos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, [isLoggedIn]);
 
-  const handleUpload = async (e: React.FormEvent) => {
+  const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) return;
-
-    setIsUploading(true);
-    const data = new FormData();
-    data.append("photo", file);
-    data.append("title", formData.title);
-    data.append("category", formData.category);
-    data.append("event", formData.event);
-    data.append("height", formData.height);
-
-    try {
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: data
-      });
-      if (res.ok) {
-        alert("Uploaded successfully to Hostinger!");
-        setFormData({ title: "", category: "", event: "Portraits", height: "h-[400px]" });
-        setFile(null);
-        fetchPhotos();
-      } else {
-        const err = await res.json();
-        alert(`Upload failed: ${err.error}`);
-      }
-    } catch (err) {
-      alert("Upload failed. Check console.");
-    } finally {
-      setIsUploading(false);
+    if (loginData.username === "alvi" && loginData.password === "123456") {
+      setIsLoggedIn(true);
+    } else {
+      alert("Invalid credentials");
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure?")) return;
-    await fetch(`/api/photos/${id}`, { method: "DELETE" });
-    fetchPhotos();
+  const handleAddPhoto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.src) return;
+
+    setIsSaving(true);
+    try {
+      await addDoc(collection(db, "photos"), {
+        ...formData,
+        createdAt: serverTimestamp()
+      });
+      alert("Photo added successfully!");
+      setFormData({ src: "", title: "", category: "", event: "Portraits", height: "h-[400px]" });
+    } catch (err) {
+      console.error("Error adding photo:", err);
+      alert("Failed to add photo.");
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure?")) return;
+    try {
+      await deleteDoc(doc(db, "photos", id));
+    } catch (err) {
+      console.error("Error deleting photo:", err);
+    }
+  };
+
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center p-6">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md bg-[#111] border border-white/10 rounded-3xl p-8 shadow-2xl"
+        >
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center text-cyan-400 mb-4">
+              <Settings className="w-8 h-8" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-100">Admin Login</h1>
+            <p className="text-slate-500 text-sm mt-2">Enter your credentials to manage gallery</p>
+          </div>
+          
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Username</label>
+              <input 
+                type="text" 
+                value={loginData.username}
+                onChange={(e) => setLoginData({...loginData, username: e.target.value})}
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors text-white"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Password</label>
+              <input 
+                type="password" 
+                value={loginData.password}
+                onChange={(e) => setLoginData({...loginData, password: e.target.value})}
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors text-white"
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full mt-4" icon={LogIn}>Login</Button>
+            <button type="button" onClick={onBack} className="w-full text-sm text-slate-500 hover:text-slate-300 transition-colors mt-2">Back to Portfolio</button>
+          </form>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-slate-200 p-8">
@@ -696,25 +745,37 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
             </button>
             <h1 className="text-3xl font-bold tracking-tight">Gallery Admin</h1>
           </div>
-          <div className="flex items-center gap-2 text-cyan-400 bg-cyan-500/10 px-4 py-2 rounded-full border border-cyan-500/20">
-            <Database className="w-4 h-4" />
-            <span className="text-sm font-semibold">Hostinger Storage Connected</span>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-cyan-400 bg-cyan-500/10 px-4 py-2 rounded-full border border-cyan-500/20">
+              <Database className="w-4 h-4" />
+              <span className="text-sm font-semibold">Firebase Connected</span>
+            </div>
+            <button onClick={() => setIsLoggedIn(false)} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 transition-colors">
+              <LogOut className="w-5 h-5" />
+            </button>
           </div>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-12">
-          {/* Upload Form */}
+          {/* Add Photo Form */}
           <div className="lg:col-span-1">
             <div className="bg-[#111] border border-white/5 rounded-3xl p-8 sticky top-8">
               <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
-                <Upload className="w-5 h-5 text-cyan-500" /> Upload New Photo
+                <Upload className="w-5 h-5 text-cyan-500" /> Add New Photo
               </h2>
-              <form onSubmit={handleUpload} className="space-y-4">
+              <p className="text-xs text-slate-500 mb-6 leading-relaxed">
+                1. Upload your photo to Hostinger File Manager.<br/>
+                2. Copy the public URL (e.g. https://yourdomain.com/gallery/photo.jpg).<br/>
+                3. Paste the URL below to add it to your portfolio.
+              </p>
+              <form onSubmit={handleAddPhoto} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Photo File</label>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Image URL (from Hostinger)</label>
                   <input 
-                    type="file" 
-                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    type="url" 
+                    placeholder="https://wheat-panther-882734.hostingersite.com/gallery/..."
+                    value={formData.src}
+                    onChange={(e) => setFormData({...formData, src: e.target.value})}
                     className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors"
                     required
                   />
@@ -772,10 +833,10 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
                 <Button 
                   type="submit" 
                   className="w-full mt-4" 
-                  disabled={isUploading}
-                  icon={isUploading ? null : Upload}
+                  disabled={isSaving}
+                  icon={isSaving ? null : Upload}
                 >
-                  {isUploading ? "Uploading to Hostinger..." : "Upload Photo"}
+                  {isSaving ? "Saving..." : "Add to Gallery"}
                 </Button>
               </form>
             </div>
@@ -806,7 +867,7 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
               ))}
               {photos.length === 0 && (
                 <div className="col-span-full py-20 text-center border-2 border-dashed border-white/5 rounded-3xl text-slate-500">
-                  No photos uploaded yet.
+                  No photos in your gallery yet.
                 </div>
               )}
             </div>

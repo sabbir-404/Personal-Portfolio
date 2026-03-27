@@ -1,0 +1,24 @@
+{
+  "entities": {
+    "Photo": {
+      "title": "Photo",
+      "description": "A photography image metadata",
+      "type": "object",
+      "properties": {
+        "src": { "type": "string", "description": "The public URL of the image" },
+        "title": { "type": "string", "description": "The title of the photo" },
+        "category": { "type": "string", "description": "The category (e.g. Portrait)" },
+        "event": { "type": "string", "description": "The event type (e.g. Corporate)" },
+        "height": { "type": "string", "description": "The display height class (e.g. h-[400px])" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["src", "title", "category", "event", "height"]
+    }
+  },
+  "firestore": {
+    "/photos/{photoId}": {
+      "schema": "Photo",
+      "description": "Collection of photography images"
+    }
+  }
+}
