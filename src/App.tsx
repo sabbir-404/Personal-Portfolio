@@ -1,11 +1,12 @@
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowRight, Code, Camera, Mail, Github, Linkedin, Instagram, Aperture, Terminal, Layers, User, X, ExternalLink, Database, Cpu, Globe, Smartphone, Server, Upload, Trash2, LogIn, LogOut, Settings } from "lucide-react";
+import { ArrowRight, Code, Camera, Mail, Github, Linkedin, Instagram, Aperture, Terminal, Layers, User, X, ExternalLink, Database, Cpu, Globe, Smartphone, Server, Upload, Trash2, LogIn, LogOut, Settings, ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import React, { useState, useMemo, ReactNode, useEffect, Component } from "react";
 import { cn } from "@/lib/utils";
 import { db } from "./firebase";
 import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, serverTimestamp, getDocFromServer } from "firebase/firestore";
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
+import { AdminPanel } from "./components/AdminPanel";
 
 // --- Firestore Error Handling ---
 enum OperationType {
@@ -230,94 +231,262 @@ const ProjectModal = ({ project, onClose }: { project: Project | null, onClose: 
   );
 };
 
+// --- Clean Backgroundless Self Image Component for Developer Side ---
+const FuturisticAvatar = ({ customSrc }: { customSrc?: string }) => {
+  const baseSources = [
+    "/self_image_dev.jpg",
+    "/self_image_dev.png",
+    "/self_image_dev.jpeg",
+    "/self_image.jpg",
+    "/self_image.png",
+    "/self_image.jpeg",
+    "/uploads/self_image_dev.jpg",
+    "/uploads/self_image_dev.png",
+    "/uploads/self_image.jpg",
+    "/uploads/self_image.png",
+    "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=1000&auto=format&fit=crop"
+  ];
+  
+  const sources = useMemo(() => {
+    if (customSrc) {
+      return [customSrc, ...baseSources];
+    }
+    return baseSources;
+  }, [customSrc]);
+
+  const [sourceIndex, setSourceIndex] = useState(0);
+
+  useEffect(() => {
+    setSourceIndex(0);
+  }, [sources]);
+
+  const handleError = () => {
+    if (sourceIndex < sources.length - 1) {
+      setSourceIndex(sourceIndex + 1);
+    }
+  };
+
+  return (
+    <div className="relative w-full max-w-sm mx-auto aspect-[3/4] flex items-center justify-center p-4">
+      <div className="relative w-full max-w-xs h-full min-h-[360px] overflow-hidden bg-transparent group">
+        {/* Soft, simple cyan backdrop glow */}
+        <div className="absolute inset-x-0 bottom-0 top-1/4 bg-gradient-to-t from-cyan-500/10 via-cyan-500/2 to-transparent blur-3xl opacity-80 pointer-events-none -z-10" />
+        
+        {/* Clean, backgroundless self-portrait using a linear mask fadeout */}
+        <img 
+          src={sources[sourceIndex]} 
+          onError={handleError}
+          alt="Sabbir Islam Alvi" 
+          referrerPolicy="no-referrer"
+          className="w-full h-full object-cover transition-all duration-1000 ease-in-out group-hover:scale-105"
+          style={{ 
+            maskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)'
+          }}
+        />
+      </div>
+    </div>
+  );
+};
+
+// --- Clean Backgroundless Self Image Component for Photography Side ---
+const PhotographerAvatar = ({ customSrc }: { customSrc?: string }) => {
+  const baseSources = [
+    "/self_image_photo.jpg",
+    "/self_image_photo.png",
+    "/self_image_photo.jpeg",
+    "/self_image.jpg",
+    "/self_image.png",
+    "/self_image.jpeg",
+    "/uploads/self_image_photo.jpg",
+    "/uploads/self_image_photo.png",
+    "/uploads/self_image.jpg",
+    "/uploads/self_image.png",
+    "https://images.unsplash.com/photo-1610216705422-caa3fcb6d158?q=80&w=1000&auto=format&fit=crop"
+  ];
+
+  const sources = useMemo(() => {
+    if (customSrc) {
+      return [customSrc, ...baseSources];
+    }
+    return baseSources;
+  }, [customSrc]);
+
+  const [sourceIndex, setSourceIndex] = useState(0);
+
+  useEffect(() => {
+    setSourceIndex(0);
+  }, [sources]);
+
+  const handleError = () => {
+    if (sourceIndex < sources.length - 1) {
+      setSourceIndex(sourceIndex + 1);
+    }
+  };
+
+  return (
+    <div className="relative w-full max-w-sm mx-auto aspect-[3/4] flex items-center justify-center p-4">
+      <div className="relative w-full max-w-xs h-full min-h-[360px] overflow-hidden bg-transparent group">
+        {/* Soft, simple orange backdrop glow */}
+        <div className="absolute inset-x-0 bottom-0 top-1/4 bg-gradient-to-t from-orange-500/10 via-orange-500/2 to-transparent blur-3xl opacity-80 pointer-events-none -z-10" />
+        
+        {/* Clean, backgroundless self-portrait using a linear mask fadeout */}
+        <img 
+          src={sources[sourceIndex]} 
+          onError={handleError}
+          alt="Sabbir Islam Alvi - Photographer" 
+          referrerPolicy="no-referrer"
+          className="w-full h-full object-cover transition-all duration-1000 ease-in-out group-hover:scale-105"
+          style={{ 
+            maskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)'
+          }}
+        />
+      </div>
+    </div>
+  );
+};
+
+
 // --- Main Portfolio (Developer + Intro) ---
 
-const MainPortfolio = ({ onSwitchMode }: { onSwitchMode: () => void }) => {
+interface MainPortfolioProps {
+  onSwitchMode: () => void;
+  onAdmin: () => void;
+  devSettings: any;
+  devProjects: any[];
+}
+
+const MainPortfolio = ({ onSwitchMode, onAdmin, devSettings, devProjects }: MainPortfolioProps) => {
   const [activeFilter, setActiveFilter] = useState("All");
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
-  const projects: Project[] = [
-    {
-      id: 1,
-      title: "AI Image Generator",
-      subtitle: "Machine Learning",
-      category: "Machine Learning",
-      description: "A deep learning model that generates high-fidelity images from textual descriptions using Diffusion models. Built with PyTorch and integrated into a React frontend.",
-      tech: ["PyTorch", "React", "FastAPI", "Tailwind"],
-      techIcons: [Cpu, Globe, Server],
-      repoUrl: "https://github.com/sabbir/ai-gen",
-      className: "md:col-span-2",
-      content: (
-        <div className="absolute inset-0 flex items-center justify-center opacity-30">
-          <div className="w-64 h-64 bg-cyan-500 rounded-full blur-[100px]" />
-        </div>
-      )
-    },
-    {
-      id: 2,
-      title: "E-Commerce API",
-      subtitle: "Backend System",
-      category: "Web Development",
-      description: "A robust, scalable RESTful API for modern e-commerce platforms. Features include JWT authentication, real-time inventory tracking, and Stripe integration.",
-      tech: ["Node.js", "Express", "PostgreSQL", "Redis"],
-      techIcons: [Server, Database, Code],
-      repoUrl: "https://github.com/sabbir/shop-api",
-      content: (
-        <div className="h-full flex items-center justify-center">
-          <div className="w-32 h-32 bg-[#1a1a1a] rounded-2xl rotate-12 shadow-2xl border border-white/10 flex items-center justify-center">
-            <Code className="w-10 h-10 text-cyan-500/50" />
+  // Helper to map dynamic text technology strings to gorgeous Lucide icons
+  const getTechIcon = (techName: string) => {
+    const name = techName.toLowerCase();
+    if (name.includes("react") || name.includes("next") || name.includes("vue") || name.includes("angular")) return Globe;
+    if (name.includes("node") || name.includes("express") || name.includes("fastapi") || name.includes("django")) return Server;
+    if (name.includes("postgres") || name.includes("sql") || name.includes("database") || name.includes("redis") || name.includes("mongo")) return Database;
+    if (name.includes("python") || name.includes("pytorch") || name.includes("machine") || name.includes("ai") || name.includes("tensor")) return Cpu;
+    if (name.includes("mobile") || name.includes("ios") || name.includes("android") || name.includes("smartphone")) return Smartphone;
+    return Code;
+  };
+
+  const projects = useMemo(() => {
+    if (devProjects && devProjects.length > 0) {
+      return devProjects.map((p, idx) => ({
+        id: p.id || idx,
+        title: p.title,
+        subtitle: p.subtitle,
+        category: p.category,
+        description: p.description,
+        tech: p.tech ? p.tech.split(",").map((s: string) => s.trim()) : [],
+        techIcons: p.tech ? p.tech.split(",").slice(0, 3).map((t: string) => getTechIcon(t)) : [Code],
+        repoUrl: p.repoUrl || "#",
+        className: idx % 3 === 0 ? "md:col-span-2" : "",
+        content: p.thumbnail ? (
+          <img src={p.thumbnail} alt={p.title} className="absolute inset-0 w-full h-full object-cover opacity-15 group-hover:opacity-25 transition-all duration-500" referrerPolicy="no-referrer" />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center opacity-30">
+            <div className="w-64 h-64 bg-cyan-500 rounded-full blur-[100px]" />
           </div>
-        </div>
-      )
-    },
-    {
-      id: 3,
-      title: "Portfolio V1",
-      subtitle: "Web Design",
-      category: "Web Development",
-      description: "My first professional portfolio website, focusing on minimalist design and smooth user experience. Built with pure HTML/CSS and subtle JS animations.",
-      tech: ["HTML5", "CSS3", "JavaScript"],
-      techIcons: [Globe, Layers],
-      repoUrl: "https://github.com/sabbir/portfolio-v1",
-      content: (
-        <div className="h-full flex items-center justify-center">
-          <Layers className="w-16 h-16 text-blue-500/30" />
-        </div>
-      )
-    },
-    {
-      id: 4,
-      title: "Smart Home Dashboard",
-      subtitle: "IoT & React",
-      category: "Web Development",
-      description: "A real-time dashboard for monitoring and controlling IoT devices within a smart home ecosystem. Uses WebSockets for low-latency updates.",
-      tech: ["React", "Socket.io", "MQTT", "Node.js"],
-      techIcons: [Smartphone, Server, Cpu],
-      repoUrl: "https://github.com/sabbir/smart-home",
-      className: "md:col-span-2",
-      content: (
-        <>
-          <div className="absolute inset-0 bg-[radial-gradient(#333_1px,transparent_1px)] [background-size:16px_16px] opacity-30" />
-          <div className="absolute bottom-0 right-0 w-3/4 h-3/4 bg-[#1a1a1a] rounded-tl-3xl border-t border-l border-white/10 shadow-2xl p-6">
-            <div className="flex gap-4 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-cyan-500/20 border border-cyan-500/30" />
-              <div className="w-12 h-12 rounded-xl bg-blue-500/20 border border-blue-500/30" />
-              <div className="w-12 h-12 rounded-xl bg-purple-500/20 border border-purple-500/30" />
-            </div>
-            <div className="h-4 w-1/2 bg-white/5 rounded mb-2" />
-            <div className="h-4 w-1/3 bg-white/5 rounded" />
-          </div>
-        </>
-      )
+        )
+      }));
     }
-  ];
+
+    return [
+      {
+        id: 1,
+        title: "AI Image Generator",
+        subtitle: "Machine Learning",
+        category: "Machine Learning",
+        description: "A deep learning model that generates high-fidelity images from textual descriptions using Diffusion models. Built with PyTorch and integrated into a React frontend.",
+        tech: ["PyTorch", "React", "FastAPI", "Tailwind"],
+        techIcons: [Cpu, Globe, Server],
+        repoUrl: "https://github.com/sabbir/ai-gen",
+        className: "md:col-span-2",
+        content: (
+          <div className="absolute inset-0 flex items-center justify-center opacity-30">
+            <div className="w-64 h-64 bg-cyan-500 rounded-full blur-[100px]" />
+          </div>
+        )
+      },
+      {
+        id: 2,
+        title: "E-Commerce API",
+        subtitle: "Backend System",
+        category: "Web Development",
+        description: "A robust, scalable RESTful API for modern e-commerce platforms. Features include JWT authentication, real-time inventory tracking, and Stripe integration.",
+        tech: ["Node.js", "Express", "PostgreSQL", "Redis"],
+        techIcons: [Server, Database, Code],
+        repoUrl: "https://github.com/sabbir/shop-api",
+        content: (
+          <div className="h-full flex items-center justify-center">
+            <div className="w-32 h-32 bg-[#1a1a1a] rounded-2xl rotate-12 shadow-2xl border border-white/10 flex items-center justify-center">
+              <Code className="w-10 h-10 text-cyan-500/50" />
+            </div>
+          </div>
+        )
+      },
+      {
+        id: 3,
+        title: "Portfolio V1",
+        subtitle: "Web Design",
+        category: "Web Development",
+        description: "My first professional portfolio website, focusing on minimalist design and smooth user experience. Built with pure HTML/CSS and subtle JS animations.",
+        tech: ["HTML5", "CSS3", "JavaScript"],
+        techIcons: [Globe, Layers],
+        repoUrl: "https://github.com/sabbir/portfolio-v1",
+        content: (
+          <div className="h-full flex items-center justify-center">
+            <Layers className="w-16 h-16 text-blue-500/30" />
+          </div>
+        )
+      },
+      {
+        id: 4,
+        title: "Smart Home Dashboard",
+        subtitle: "IoT & React",
+        category: "Web Development",
+        description: "A real-time dashboard for monitoring and controlling IoT devices within a smart home ecosystem. Uses WebSockets for low-latency updates.",
+        tech: ["React", "Socket.io", "MQTT", "Node.js"],
+        techIcons: [Smartphone, Server, Cpu],
+        repoUrl: "https://github.com/sabbir/smart-home",
+        className: "md:col-span-2",
+        content: (
+          <>
+            <div className="absolute inset-0 bg-[radial-gradient(#333_1px,transparent_1px)] [background-size:16px_16px] opacity-30" />
+            <div className="absolute bottom-0 right-0 w-3/4 h-3/4 bg-[#1a1a1a] rounded-tl-3xl border-t border-l border-white/10 shadow-2xl p-6">
+              <div className="flex gap-4 mb-4">
+                <div className="w-12 h-12 rounded-xl bg-cyan-500/20 border border-cyan-500/30" />
+                <div className="w-12 h-12 rounded-xl bg-blue-500/20 border border-blue-500/30" />
+                <div className="w-12 h-12 rounded-xl bg-purple-500/20 border border-purple-500/30" />
+              </div>
+              <div className="h-4 w-1/2 bg-white/5 rounded mb-2" />
+              <div className="h-4 w-1/3 bg-white/5 rounded" />
+            </div>
+          </>
+        )
+      }
+    ];
+  }, [devProjects]);
+
+  const skills = useMemo(() => {
+    if (devSettings?.skillsList) {
+      return devSettings.skillsList.split(",").map((s: string) => s.trim()).filter(Boolean);
+    }
+    return ["React", "TypeScript", "Node.js", "Python", "Next.js", "PostgreSQL", "Docker", "AWS"];
+  }, [devSettings?.skillsList]);
 
   const filteredProjects = useMemo(() => {
     if (activeFilter === "All") return projects;
     return projects.filter(p => p.category === activeFilter);
-  }, [activeFilter]);
+  }, [activeFilter, projects]);
 
   const filters = ["All", "Web Development", "Machine Learning"];
+
+  const hireStatus = devSettings?.isAvailableForHire ?? true;
+  const devName = devSettings?.name || "Sabbir Islam Alvi";
 
   return (
     <div className="min-h-screen bg-[#050505] text-slate-300 font-sans selection:bg-cyan-500/30">
@@ -330,7 +499,7 @@ const MainPortfolio = ({ onSwitchMode }: { onSwitchMode: () => void }) => {
             <div className="w-8 h-8 bg-cyan-500/10 border border-cyan-500/20 rounded-lg flex items-center justify-center text-cyan-400">
               <Code className="w-4 h-4" />
             </div>
-            <span className="font-semibold tracking-tight text-lg text-slate-100">Sabbir Islam Alvi</span>
+            <span className="font-semibold tracking-tight text-lg text-slate-100">{devName}</span>
           </div>
           
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-400">
@@ -342,7 +511,14 @@ const MainPortfolio = ({ onSwitchMode }: { onSwitchMode: () => void }) => {
             </button>
           </div>
 
-          <Button variant="secondary" className="px-5 py-2 text-sm" icon={Mail}>Contact</Button>
+          <Button 
+            variant="secondary" 
+            className="px-5 py-2 text-sm" 
+            icon={Mail}
+            onClick={() => window.location.href = `mailto:${devSettings?.contactEmail || "SABBIRISLAMALVI070800@gmail.com"}`}
+          >
+            Contact
+          </Button>
         </div>
       </nav>
 
@@ -360,19 +536,34 @@ const MainPortfolio = ({ onSwitchMode }: { onSwitchMode: () => void }) => {
             transition={{ duration: 0.8, ease: "easeOut" }}
             className="relative z-10"
           >
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-sm font-medium mb-6">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
-              </span>
-              Available for hire
-            </div>
+            {hireStatus && (
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-sm font-medium mb-6">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                </span>
+                Available for hire
+              </div>
+            )}
+            
             <h1 className="text-5xl md:text-7xl font-bold tracking-tighter leading-[1.1] mb-6 text-slate-100">
-              Hello, I'm <br/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">Sabbir Islam Alvi.</span>
+              {devSettings?.headline ? (
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
+                  {devSettings.headline}
+                </span>
+              ) : (
+                <>
+                  Hello, I'm <br/>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">Sabbir Islam Alvi.</span>
+                </>
+              )}
             </h1>
             <p className="text-xl text-slate-400 max-w-lg leading-relaxed mb-8">
-              I am a <span className="font-semibold text-slate-200">Coder</span> building the future, and a <span className="font-semibold text-slate-200">Photographer</span> capturing the present.
+              {devSettings?.subheadline || (
+                <>
+                  I am a <span className="font-semibold text-slate-200">Coder</span> building the future, and a <span className="font-semibold text-slate-200">Photographer</span> capturing the present.
+                </>
+              )}
             </p>
             <div className="flex flex-wrap gap-4">
               <Button variant="primary" icon={ArrowRight} onClick={() => document.getElementById('projects')?.scrollIntoView({ behavior: 'smooth' })}>
@@ -385,46 +576,32 @@ const MainPortfolio = ({ onSwitchMode }: { onSwitchMode: () => void }) => {
           </motion.div>
 
           {/* Right: Person Preview Pop-up */}
-          <div className="relative flex justify-center md:justify-end h-full items-end">
+          <div className="relative flex justify-center md:justify-end h-full items-center">
             {/* Futuristic Glow Behind Image */}
-            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-[140%] h-[80%] bg-gradient-to-t from-cyan-900/40 via-blue-900/10 to-transparent rounded-full blur-3xl -z-10" />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-cyan-500/10 rounded-full blur-[80px] -z-10" />
+            <div className="absolute w-[120%] h-[120%] bg-gradient-to-t from-cyan-950/20 via-cyan-900/10 to-transparent rounded-full blur-3xl -z-10 animate-pulse" />
+            <div className="absolute w-72 h-72 bg-cyan-500/5 rounded-full blur-[80px] -z-10" />
             
             <motion.div
-              initial={{ y: 120, opacity: 0, filter: 'blur(10px)' }}
-              animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
-              transition={{ 
-                type: "spring",
-                stiffness: 60,
-                damping: 20,
-                delay: 0.2
-              }}
-              className="relative z-10 w-full max-w-md flex justify-center"
+              initial={{ scale: 0.9, opacity: 0, filter: 'blur(10px)' }}
+              animate={{ scale: 1, opacity: 1, filter: 'blur(0px)' }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              className="relative z-10 w-full max-w-md flex justify-center items-center"
             >
-              {/* Image with CSS Masking for backgroundless pop-up effect */}
-              <img 
-                src="https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=1000&auto=format&fit=crop" 
-                alt="Sabbir Islam Alvi" 
-                className="w-full h-auto object-contain drop-shadow-[0_0_30px_rgba(34,211,238,0.15)]"
-                style={{ 
-                  maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)',
-                  WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)'
-                }}
-              />
+              <FuturisticAvatar customSrc={devSettings?.avatarUrl} />
               
               {/* Floating Badge */}
               <motion.div 
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.8 }}
-                className="absolute bottom-12 -right-4 md:-right-8 bg-[#111]/80 backdrop-blur-md p-4 rounded-2xl shadow-2xl border border-white/10 max-w-[200px]"
+                className="absolute bottom-4 -right-2 md:-right-6 bg-[#0c0c0c]/90 backdrop-blur-md p-4 rounded-2xl shadow-2xl border border-cyan-500/20 max-w-[200px] z-30 shadow-[0_0_20px_rgba(6,182,212,0.15)]"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
                     <User className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="font-bold text-sm text-slate-100 leading-tight">Sabbir Islam Alvi</p>
+                    <p className="font-bold text-sm text-slate-100 leading-tight">{devName}</p>
                     <p className="text-[10px] text-cyan-400 font-medium uppercase tracking-wider mt-0.5">CSE & Photography</p>
                   </div>
                 </div>
@@ -456,7 +633,7 @@ const MainPortfolio = ({ onSwitchMode }: { onSwitchMode: () => void }) => {
               ))}
             </div>
           </div>
-          <a href="#" className="text-sm font-medium text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+          <a href="#projects" className="text-sm font-medium text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
             View all <ArrowRight className="w-4 h-4" />
           </a>
         </div>
@@ -499,7 +676,7 @@ const MainPortfolio = ({ onSwitchMode }: { onSwitchMode: () => void }) => {
           </p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-          {["React", "TypeScript", "Node.js", "Python", "Next.js", "PostgreSQL", "Docker", "AWS"].map((tech) => (
+          {skills.map((tech) => (
             <div key={tech} className="p-6 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-cyan-500/30 transition-all duration-300">
               <div className="font-semibold text-lg text-slate-300">{tech}</div>
             </div>
@@ -508,9 +685,161 @@ const MainPortfolio = ({ onSwitchMode }: { onSwitchMode: () => void }) => {
       </Section>
       
       {/* Footer */}
-      <footer className="py-12 text-center text-slate-500 text-sm border-t border-white/5">
-        <p>© {new Date().getFullYear()} Sabbir Islam Alvi. All rights reserved.</p>
+      <footer className="py-12 text-center text-slate-500 text-sm border-t border-white/5 flex flex-col items-center justify-center gap-2">
+        <p className="flex items-center justify-center gap-2">
+          <span>© {new Date().getFullYear()} {devName}. All rights reserved.</span>
+          <button 
+            onClick={onAdmin} 
+            className="text-slate-700 hover:text-cyan-400 transition-colors p-1 rounded-full hover:bg-white/5" 
+            title="Admin Access"
+          >
+            <Lock className="w-3.5 h-3.5" />
+          </button>
+        </p>
       </footer>
+    </div>
+  );
+};
+
+// --- Featured Images Banner Component ---
+const FeaturedImagesBanner = ({ slides }: { slides: any[] }) => {
+  const featuredImages = useMemo(() => {
+    if (slides && slides.length > 0) {
+      return slides;
+    }
+    return [
+      {
+        src: "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?q=80&w=1600&auto=format&fit=crop",
+        title: "Alps at Midnight",
+        category: "Landscape",
+        desc: "A long-exposure capture of alpine peaks standing proud under a stellar, star-studded sky.",
+        specs: "50mm · f/1.8 · 25s · ISO 1600"
+      },
+      {
+        src: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?q=80&w=1600&auto=format&fit=crop",
+        title: "Neon Reflections",
+        category: "Urban / Night",
+        desc: "Rainy streets of Tokyo alive with high-contrast reflection of cyberpunk-inspired neon signage.",
+        specs: "35mm · f/1.4 · 1/80s · ISO 400"
+      },
+      {
+        src: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=1600&auto=format&fit=crop",
+        title: "Chiaroscuro Silhouette",
+        category: "Portrait",
+        desc: "Studio portraiture emphasizing high contrast shadows and clean emotive highlights.",
+        specs: "85mm · f/1.2 · 1/200s · ISO 100"
+      },
+      {
+        src: "https://images.unsplash.com/photo-1505118380757-91f5f5632de0?q=80&w=1600&auto=format&fit=crop",
+        title: "The Turquoise Abyss",
+        category: "Nature",
+        desc: "Stunning overhead drone photograph capturing the explosive energy of rolling waves crashing on basalt rock.",
+        specs: "24mm · f/4.0 · 1/1000s · ISO 200"
+      }
+    ];
+  }, [slides]);
+
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % featuredImages.length);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [featuredImages.length]);
+
+  const handlePrev = () => {
+    setCurrentIndex((prev) => (prev - 1 + featuredImages.length) % featuredImages.length);
+  };
+
+  const handleNext = () => {
+    setCurrentIndex((prev) => (prev + 1) % featuredImages.length);
+  };
+
+  return (
+    <div className="w-full max-w-7xl mx-auto px-6 md:px-12 mb-16 mt-8">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div className="text-left">
+          <span className="text-xs font-mono uppercase tracking-widest text-orange-500">Curated Works</span>
+          <h2 className="text-2xl md:text-3xl font-serif italic mt-1">Featured Showcase</h2>
+        </div>
+        <div className="flex gap-2 self-start sm:self-auto">
+          <button 
+            onClick={handlePrev}
+            className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/5 transition-all duration-300"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={handleNext}
+            className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/5 transition-all duration-300"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="relative aspect-[16/9] md:aspect-[21/9] w-full overflow-hidden rounded-3xl border border-white/10 bg-neutral-950">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentIndex}
+            initial={{ opacity: 0, scale: 1.02 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.8, ease: "easeInOut" }}
+            className="absolute inset-0 w-full h-full"
+          >
+            {/* Image */}
+            <img 
+              src={featuredImages[currentIndex].src} 
+              alt={featuredImages[currentIndex].title}
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover opacity-70 filter contrast-105"
+            />
+            
+            {/* Elegant vignette and details backdrop overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent hidden md:block" />
+
+            {/* Slide details overlay content */}
+            <div className="absolute inset-x-0 bottom-0 p-6 md:p-10 flex flex-col md:flex-row md:items-end justify-between gap-6 z-10">
+              <div className="max-w-xl text-left">
+                <span className="text-[10px] uppercase font-mono tracking-widest text-orange-400 bg-orange-500/10 px-2.5 py-1 rounded-full border border-orange-500/20 inline-block mb-3">
+                  {featuredImages[currentIndex].category}
+                </span>
+                <h3 className="text-2xl md:text-4xl font-serif italic text-white mb-2 leading-tight">
+                  {featuredImages[currentIndex].title}
+                </h3>
+                <p className="text-xs md:text-sm text-slate-300 font-light tracking-wide line-clamp-2 md:line-clamp-none">
+                  {featuredImages[currentIndex].desc}
+                </p>
+              </div>
+
+              {/* Specs & Meta details badge */}
+              <div className="flex flex-col items-start md:items-end gap-2 shrink-0">
+                <span className="text-[10px] font-mono text-slate-400/80 bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg flex items-center gap-1.5 backdrop-blur-md">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 inline-block animate-pulse" />
+                  {featuredImages[currentIndex].specs}
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Progress Dots indicators */}
+        <div className="absolute top-6 right-6 flex gap-2 z-20">
+          {featuredImages.map((_, idx) => (
+            <button
+              key={idx}
+              onClick={() => setCurrentIndex(idx)}
+              className={cn(
+                "h-1.5 rounded-full transition-all duration-300 bg-white",
+                currentIndex === idx ? "w-6 opacity-100" : "w-1.5 opacity-30 hover:opacity-60"
+              )}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 };
@@ -525,69 +854,87 @@ interface Photo {
   height: string;
 }
 
-const PhotographerPortfolio = ({ onBack, onAdmin }: { onBack: () => void, onAdmin: () => void }) => {
+interface PhotographerPortfolioProps {
+  onBack: () => void;
+  onAdmin: () => void;
+  photoSettings: any;
+  showcaseSlides: any[];
+  awards: any[];
+  photos: any[];
+}
+
+const PhotographerPortfolio = ({ 
+  onBack, 
+  onAdmin, 
+  photoSettings, 
+  showcaseSlides, 
+  awards, 
+  photos 
+}: PhotographerPortfolioProps) => {
   const [activeEvent, setActiveEvent] = useState("All");
-  const [photos, setPhotos] = useState<Photo[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const path = "photos";
-    const q = query(collection(db, path), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedPhotos = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as any[];
-      
-      if (fetchedPhotos.length > 0) {
-        setPhotos(fetchedPhotos);
-      } else {
-        // Fallback to sample photos if none uploaded yet
-        setPhotos([
-          { 
-            src: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=800&auto=format&fit=crop", 
-            title: "Grand Opening Gala", 
-            category: "Events", 
-            event: "Corporate",
-            height: "h-[400px]" 
-          },
-          { 
-            src: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=800&auto=format&fit=crop", 
-            title: "Studio Session", 
-            category: "Portrait", 
-            event: "Portraits",
-            height: "h-[500px]" 
-          },
-          { 
-            src: "https://images.unsplash.com/photo-1469334031218-e382a71b716b?q=80&w=800&auto=format&fit=crop", 
-            title: "Street Style", 
-            category: "Street", 
-            event: "Urban",
-            height: "h-[350px]" 
-          },
-          { 
-            src: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?q=80&w=800&auto=format&fit=crop", 
-            title: "Night Horizon", 
-            category: "Landscape", 
-            event: "Nature",
-            height: "h-[450px]" 
-          }
-        ]);
+  const galleryPhotos = useMemo(() => {
+    if (photos && photos.length > 0) {
+      return photos;
+    }
+    return [
+      { 
+        src: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=800&auto=format&fit=crop", 
+        title: "Grand Opening Gala", 
+        category: "Events", 
+        event: "Corporate",
+        height: "h-[400px]" 
+      },
+      { 
+        src: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=800&auto=format&fit=crop", 
+        title: "Studio Session", 
+        category: "Portrait", 
+        event: "Portraits",
+        height: "h-[500px]" 
+      },
+      { 
+        src: "https://images.unsplash.com/photo-1469334031218-e382a71b716b?q=80&w=800&auto=format&fit=crop", 
+        title: "Street Style", 
+        category: "Street", 
+        event: "Urban",
+        height: "h-[350px]" 
+      },
+      { 
+        src: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?q=80&w=800&auto=format&fit=crop", 
+        title: "Night Horizon", 
+        category: "Landscape", 
+        event: "Nature",
+        height: "h-[450px]" 
       }
-      setIsLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
-    });
+    ];
+  }, [photos]);
 
-    return () => unsubscribe();
-  }, []);
+  const timelineAwards = useMemo(() => {
+    if (awards && awards.length > 0) {
+      return awards;
+    }
+    return [
+      { year: "2025", title: "Best Portrait Photographer", org: "National Arts Awards", desc: "Awarded for the 'Faces of the City' series." },
+      { year: "2024", title: "Official Event Photographer", org: "Tech Summit Global", desc: "Covered the 3-day international conference in San Francisco." },
+      { year: "2023", title: "Solo Exhibition: 'Urban Decay'", org: "Modern Art Gallery", desc: "A month-long showcase of street photography." },
+    ];
+  }, [awards]);
+
+  const gearSpecs = useMemo(() => {
+    if (photoSettings?.specsList) {
+      return photoSettings.specsList.split(",").map((s: string) => s.trim().toUpperCase()).filter(Boolean);
+    }
+    return ["LEICA M11", "SUMMILUX 50MM", "RAW PRO-RES"];
+  }, [photoSettings?.specsList]);
 
   const filteredPhotos = useMemo(() => {
-    if (activeEvent === "All") return photos;
-    return photos.filter(p => p.event === activeEvent);
-  }, [activeEvent, photos]);
+    if (activeEvent === "All") return galleryPhotos;
+    return galleryPhotos.filter(p => p.event === activeEvent);
+  }, [activeEvent, galleryPhotos]);
 
   const eventFilters = ["All", "Corporate", "Portraits", "Urban", "Nature"];
+
+  const photographerName = photoSettings?.name || "Sabbir Islam Alvi";
 
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-orange-500/30">
@@ -598,44 +945,79 @@ const PhotographerPortfolio = ({ onBack, onAdmin }: { onBack: () => void, onAdmi
             <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center">
               <Camera className="w-4 h-4 text-black" />
             </div>
-            <span className="font-medium tracking-widest uppercase text-sm">Sabbir Islam Alvi</span>
+            <span className="font-medium tracking-widest uppercase text-sm">{photographerName}</span>
           </div>
           <div className="flex items-center gap-6">
-             <button onClick={onAdmin} className="text-sm font-medium text-white/40 hover:text-white transition-colors">
-                Admin
+             <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-cyan-400 hover:text-cyan-300 transition-colors bg-cyan-500/10 px-3 py-1.5 rounded-full border border-cyan-500/20">
+                <Code className="w-4 h-4" /> Developer Portfolio
              </button>
-             <button onClick={onBack} className="text-sm font-medium text-white/70 hover:text-white transition-colors">
-                Back to Main
-             </button>
-             <Button variant="glass" className="px-5 py-2 text-xs uppercase tracking-widest">Book Now</Button>
+             <Button 
+                variant="glass" 
+                className="px-5 py-2 text-xs uppercase tracking-widest"
+                onClick={() => {
+                  if (photoSettings?.bookNowUrl) {
+                    window.open(photoSettings.bookNowUrl, '_blank');
+                  } else {
+                    window.location.href = `mailto:${photoSettings?.contactEmail || "SABBIRISLAMALVI070800@gmail.com"}`;
+                  }
+                }}
+             >
+                Book Now
+             </Button>
           </div>
         </div>
       </nav>
 
       {/* Hero */}
-      <div className="relative h-screen w-full overflow-hidden">
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center">
-           <div className="absolute inset-0 bg-black/40" />
+      <div className="relative min-h-[45vh] w-full overflow-hidden flex items-center bg-[#050505] border-b border-white/5 pt-20 pb-8">
+        {/* Background Ambient Image */}
+        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center opacity-15 filter blur-sm">
+           <div className="absolute inset-0 bg-black/60" />
         </div>
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
-          <motion.h1 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 1 }}
-            className="text-5xl md:text-9xl font-serif italic tracking-tighter mb-6"
-          >
-            Captured Moments
-          </motion.h1>
-          <motion.p 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5, duration: 0.8 }}
-            className="text-lg md:text-xl text-white/80 max-w-lg font-light tracking-wide"
-          >
-            A visual journey through events, portraits, and the unseen beauty of the world.
-          </motion.p>
+        <div className="absolute top-1/2 left-1/3 -translate-y-1/2 w-96 h-96 bg-orange-500/5 rounded-full blur-[100px] pointer-events-none" />
+        
+        <div className="relative w-full max-w-7xl mx-auto px-6 md:px-12 grid md:grid-cols-12 gap-8 md:gap-12 items-center z-10">
+          {/* Left: Text Info */}
+          <div className="md:col-span-7 text-left flex flex-col justify-center">
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8 }}
+            >
+              <span className="text-xs uppercase tracking-widest text-orange-500 font-mono font-medium mb-3 block">
+                Visual Artistry & Creative Direction
+              </span>
+              <h1 className="text-4xl sm:text-5xl md:text-6xl font-serif italic tracking-tight mb-6 text-white leading-tight">
+                {photoSettings?.headline || "Captured Moments"}
+              </h1>
+              <p className="text-base sm:text-lg text-slate-400 max-w-xl font-light tracking-wide leading-relaxed mb-8">
+                {photoSettings?.subheadline || "A professional visual journey through events, cinematic portraitures, urban stories, and the subtle, unseen beauty of the natural world."}
+              </p>
+              
+              {/* Camera metadata tags badge */}
+              <div className="flex flex-wrap gap-2 text-[10px] font-mono text-slate-500">
+                {gearSpecs.map((spec: string, i: number) => (
+                  <span key={i} className="px-3 py-1 bg-white/5 border border-white/5 rounded-full">[ {spec} ]</span>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Right: Photographer Self-Portrait */}
+          <div className="md:col-span-5 flex justify-center">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+            >
+              <PhotographerAvatar customSrc={photoSettings?.avatarUrl} />
+            </motion.div>
+          </div>
         </div>
       </div>
+
+      {/* Hero Banner to Display Important Featured Images */}
+      <FeaturedImagesBanner slides={showcaseSlides} />
 
       {/* Gallery Grid */}
       <Section>
@@ -663,16 +1045,21 @@ const PhotographerPortfolio = ({ onBack, onAdmin }: { onBack: () => void, onAdmi
           <AnimatePresence mode="popLayout">
             {filteredPhotos.map((item, i) => (
               <motion.div 
-                key={item.src}
+                key={item.id || item.src || i}
                 layout
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.4 }}
                 whileHover={{ scale: 1.02 }}
-                className={cn("group relative overflow-hidden rounded-2xl bg-slate-900 cursor-pointer break-inside-avoid mb-6", item.height)}
+                className={cn("group relative overflow-hidden rounded-2xl bg-slate-900 cursor-pointer break-inside-avoid mb-6", item.height || "h-[400px]")}
               >
-                <img src={item.src} alt={item.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
+                <img 
+                  src={item.src} 
+                  alt={item.title} 
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100" 
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
                   <p className="text-orange-400 text-xs uppercase tracking-widest mb-1 font-bold">{item.category}</p>
                   <h3 className="text-xl font-medium text-white">{item.title}</h3>
@@ -691,15 +1078,11 @@ const PhotographerPortfolio = ({ onBack, onAdmin }: { onBack: () => void, onAdmi
             <p className="text-neutral-400">A timeline of my professional journey in photography, including exhibitions, awards, and major coverage.</p>
           </div>
           <div className="md:w-2/3 space-y-8 w-full">
-            {[
-              { year: "2025", title: "Best Portrait Photographer", org: "National Arts Awards", desc: "Awarded for the 'Faces of the City' series." },
-              { year: "2024", title: "Official Event Photographer", org: "Tech Summit Global", desc: "Covered the 3-day international conference in San Francisco." },
-              { year: "2023", title: "Solo Exhibition: 'Urban Decay'", org: "Modern Art Gallery", desc: "A month-long showcase of street photography." },
-            ].map((item, i) => (
-              <div key={i} className="flex gap-6 border-b border-white/10 pb-8 last:border-0">
-                <span className="text-orange-500 font-mono text-lg">{item.year}</span>
+            {timelineAwards.map((item, i) => (
+              <div key={item.id || i} className="flex gap-6 border-b border-white/10 pb-8 last:border-0 text-left">
+                <span className="text-orange-500 font-mono text-lg shrink-0">{item.year}</span>
                 <div>
-                  <h3 className="text-xl font-medium mb-2">{item.title}</h3>
+                  <h3 className="text-xl font-medium mb-2 text-white">{item.title}</h3>
                   <p className="text-sm text-neutral-400 uppercase tracking-wider mb-2">{item.org}</p>
                   <p className="text-neutral-500">{item.desc}</p>
                 </div>
@@ -709,334 +1092,22 @@ const PhotographerPortfolio = ({ onBack, onAdmin }: { onBack: () => void, onAdmi
         </div>
       </Section>
 
-      <footer className="py-12 text-center text-neutral-600 text-sm">
-        <div className="flex justify-center gap-6 mb-8">
+      <footer className="py-12 text-center text-neutral-600 text-sm flex flex-col items-center justify-center gap-2">
+        <div className="flex justify-center gap-6 mb-4">
            <Instagram className="w-5 h-5 hover:text-white transition-colors cursor-pointer" />
            <Mail className="w-5 h-5 hover:text-white transition-colors cursor-pointer" />
         </div>
-        <p>© {new Date().getFullYear()} Sabbir Islam Alvi Photography.</p>
+        <p className="flex items-center justify-center gap-2">
+          <span>© {new Date().getFullYear()} {photographerName} Photography.</span>
+          <button 
+            onClick={onAdmin} 
+            className="text-neutral-800 hover:text-orange-500 transition-colors p-1 rounded-full hover:bg-white/5" 
+            title="Admin Access"
+          >
+            <Lock className="w-3.5 h-3.5" />
+          </button>
+        </p>
       </footer>
-    </div>
-  );
-};
-
-// --- Admin Panel ---
-
-const AdminPanel = ({ onBack }: { onBack: () => void }) => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  const [photos, setPhotos] = useState<any[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
-  const [formData, setFormData] = useState({
-    title: "",
-    category: "",
-    event: "Portraits",
-    height: "h-[400px]"
-  });
-  const [file, setFile] = useState<File | null>(null);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setIsLoggedIn(true);
-      } else {
-        setIsLoggedIn(false);
-      }
-      setIsAuthReady(true);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!isLoggedIn) return;
-    const path = "photos";
-    const q = query(collection(db, path), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setPhotos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
-    });
-    return () => unsubscribe();
-  }, [isLoggedIn]);
-
-  const handleLogin = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-      setIsLoggedIn(true);
-    } catch (err: any) {
-      console.error("Firebase Auth Error:", err);
-      if (err.code === 'auth/admin-restricted-operation') {
-        alert("Google Login is restricted. Please ensure Google Sign-in is enabled in your Firebase Console.");
-      } else {
-        alert(`Failed to authenticate with Google: ${err.message}`);
-      }
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      setIsLoggedIn(false);
-    } catch (err) {
-      console.error("Logout Error:", err);
-    }
-  };
-
-  const handleAddPhoto = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file) {
-      alert("Please select a photo file.");
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const isVercel = window.location.hostname.includes("vercel.app");
-      if (isVercel) {
-        throw new Error("Direct upload is not supported on Vercel yet. Please use the AI Studio preview to upload photos.");
-      }
-
-      // 1. Upload to Hostinger via backend
-      const uploadData = new FormData();
-      uploadData.append("photo", file);
-      
-      const uploadRes = await fetch("/api/upload", {
-        method: "POST",
-        body: uploadData
-      });
-
-      const contentType = uploadRes.headers.get("content-type");
-      
-      if (!uploadRes.ok) {
-        let errorMessage = "Upload failed";
-        if (contentType && contentType.includes("application/json")) {
-          const err = await uploadRes.json();
-          errorMessage = err.error || errorMessage;
-        } else {
-          const text = await uploadRes.text();
-          console.error("Server returned non-JSON error:", text);
-          errorMessage = `Server error (${uploadRes.status}). The server might not be running correctly.`;
-        }
-        throw new Error(errorMessage);
-      }
-
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await uploadRes.text();
-        console.error("Expected JSON but got:", text);
-        throw new Error("Invalid server response format. Expected JSON.");
-      }
-
-      const { url } = await uploadRes.json();
-
-      // 2. Save metadata to Firestore
-      const path = "photos";
-      try {
-        await addDoc(collection(db, path), {
-          src: url,
-          title: formData.title,
-          category: formData.category,
-          event: formData.event,
-          height: formData.height,
-          createdAt: serverTimestamp()
-        });
-      } catch (error) {
-        handleFirestoreError(error, OperationType.CREATE, path);
-      }
-
-      alert("Photo uploaded and saved successfully!");
-      setFormData({ title: "", category: "", event: "Portraits", height: "h-[400px]" });
-      setFile(null);
-    } catch (err) {
-      console.error("Error adding photo:", err);
-      alert(`Failed to add photo: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure?")) return;
-    const path = `photos/${id}`;
-    try {
-      await deleteDoc(doc(db, "photos", id));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
-    }
-  };
-
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen bg-[#050505] flex items-center justify-center p-6">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md bg-[#111] border border-white/10 rounded-3xl p-8 shadow-2xl"
-        >
-          <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center text-cyan-400 mb-4">
-              <Settings className="w-8 h-8" />
-            </div>
-            <h1 className="text-2xl font-bold text-slate-100">Admin Access</h1>
-            <p className="text-slate-500 text-sm mt-2">Sign in with Google to manage your gallery</p>
-          </div>
-          
-          <div className="space-y-4">
-            <Button onClick={handleLogin} className="w-full" icon={LogIn}>
-              Sign in with Google
-            </Button>
-            <button type="button" onClick={onBack} className="w-full text-sm text-slate-500 hover:text-slate-300 transition-colors mt-2">
-              Back to Portfolio
-            </button>
-          </div>
-          
-          <div className="mt-8 pt-6 border-t border-white/5">
-            <p className="text-[10px] text-slate-600 uppercase tracking-widest text-center leading-relaxed">
-              Only authorized administrators can access this panel. <br/>
-              Unauthorized access attempts are logged.
-            </p>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-[#0a0a0a] text-slate-200 p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-12">
-          <div className="flex items-center gap-4">
-            <button onClick={onBack} className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors">
-              <ArrowRight className="w-5 h-5 rotate-180" />
-            </button>
-            <h1 className="text-3xl font-bold tracking-tight">Gallery Admin</h1>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-cyan-400 bg-cyan-500/10 px-4 py-2 rounded-full border border-cyan-500/20">
-              <Database className="w-4 h-4" />
-              <span className="text-sm font-semibold">Firebase Connected</span>
-            </div>
-            <button onClick={handleLogout} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 transition-colors">
-              <LogOut className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        <div className="grid lg:grid-cols-3 gap-12">
-          {/* Add Photo Form */}
-          <div className="lg:col-span-1">
-            <div className="bg-[#111] border border-white/5 rounded-3xl p-8 sticky top-8">
-              <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
-                <Upload className="w-5 h-5 text-cyan-500" /> Upload New Photo
-              </h2>
-              <p className="text-xs text-slate-500 mb-6 leading-relaxed">
-                Choose a photo from your device. It will be uploaded to your Hostinger storage via FTP and its details will be saved in Firebase.
-              </p>
-              <form onSubmit={handleAddPhoto} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Photo File</label>
-                  <input 
-                    type="file" 
-                    accept="image/*"
-                    onChange={(e) => setFile(e.target.files?.[0] || null)}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Title</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. Sunset at Beach"
-                    value={formData.title}
-                    onChange={(e) => setFormData({...formData, title: e.target.value})}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Category</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. Landscape"
-                    value={formData.category}
-                    onChange={(e) => setFormData({...formData, category: e.target.value})}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Event</label>
-                    <select 
-                      value={formData.event}
-                      onChange={(e) => setFormData({...formData, event: e.target.value})}
-                      className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors"
-                    >
-                      <option>Portraits</option>
-                      <option>Corporate</option>
-                      <option>Urban</option>
-                      <option>Nature</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Display Height</label>
-                    <select 
-                      value={formData.height}
-                      onChange={(e) => setFormData({...formData, height: e.target.value})}
-                      className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors"
-                    >
-                      <option value="h-[300px]">Short</option>
-                      <option value="h-[400px]">Medium</option>
-                      <option value="h-[500px]">Tall</option>
-                      <option value="h-[600px]">Extra Tall</option>
-                    </select>
-                  </div>
-                </div>
-                <Button 
-                  type="submit" 
-                  className="w-full mt-4" 
-                  disabled={isSaving}
-                  icon={isSaving ? null : Upload}
-                >
-                  {isSaving ? "Uploading..." : "Upload & Save"}
-                </Button>
-              </form>
-            </div>
-          </div>
-
-          {/* Manage Photos */}
-          <div className="lg:col-span-2">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {photos.map((photo) => (
-                <div key={photo.id} className="bg-[#111] border border-white/5 rounded-3xl overflow-hidden group">
-                  <div className="relative h-48">
-                    <img src={photo.src} alt={photo.title} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
-                    <button 
-                      onClick={() => handleDelete(photo.id)}
-                      className="absolute top-4 right-4 p-2 rounded-full bg-red-500/20 text-red-500 border border-red-500/30 hover:bg-red-500 hover:text-white transition-all opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="p-6">
-                    <h3 className="font-semibold text-slate-100 mb-1">{photo.title}</h3>
-                    <div className="flex gap-2">
-                      <span className="text-[10px] uppercase tracking-wider font-bold text-cyan-500 bg-cyan-500/10 px-2 py-0.5 rounded">{photo.category}</span>
-                      <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 bg-white/5 px-2 py-0.5 rounded">{photo.event}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {photos.length === 0 && (
-                <div className="col-span-full py-20 text-center border-2 border-dashed border-white/5 rounded-3xl text-slate-500">
-                  No photos in your gallery yet.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
@@ -1044,28 +1115,108 @@ const AdminPanel = ({ onBack }: { onBack: () => void }) => {
 // --- Main App ---
 
 export default function App() {
-  const [mode, setMode] = useState<Mode>("main");
+  const [mode, setMode] = useState<Mode>("photographer");
+  const [devSettings, setDevSettings] = useState<any>(null);
+  const [photoSettings, setPhotoSettings] = useState<any>(null);
+  const [devProjects, setDevProjects] = useState<any[]>([]);
+  const [awards, setAwards] = useState<any[]>([]);
+  const [showcaseSlides, setShowcaseSlides] = useState<any[]>([]);
+  const [photos, setPhotos] = useState<any[]>([]);
 
-  // Test Firestore connection
+  // 1. Listen to Developer Settings
   useEffect(() => {
-    async function testConnection() {
-      try {
-        await getDocFromServer(doc(db, 'test', 'connection'));
-      } catch (error) {
-        if(error instanceof Error && error.message.includes('the client is offline')) {
-          console.error("Please check your Firebase configuration. The client is offline.");
-        }
+    return onSnapshot(doc(db, "settings", "developer"), (docSnap) => {
+      if (docSnap.exists()) {
+        setDevSettings(docSnap.data());
       }
-    }
-    testConnection();
+    }, (error) => {
+      console.error("Error reading developer settings:", error);
+    });
+  }, []);
+
+  // 2. Listen to Photography Settings
+  useEffect(() => {
+    return onSnapshot(doc(db, "settings", "photography"), (docSnap) => {
+      if (docSnap.exists()) {
+        setPhotoSettings(docSnap.data());
+      }
+    }, (error) => {
+      console.error("Error reading photography settings:", error);
+    });
+  }, []);
+
+  // 3. Listen to Developer Projects
+  useEffect(() => {
+    const q = query(collection(db, "dev_projects"), orderBy("createdAt", "desc"));
+    return onSnapshot(q, (snapshot) => {
+      setDevProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Error reading dev projects:", error);
+    });
+  }, []);
+
+  // 4. Listen to Awards
+  useEffect(() => {
+    const q = query(collection(db, "awards"), orderBy("createdAt", "desc"));
+    return onSnapshot(q, (snapshot) => {
+      setAwards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Error reading awards:", error);
+    });
+  }, []);
+
+  // 5. Listen to Showcase
+  useEffect(() => {
+    const q = query(collection(db, "featured_showcase"), orderBy("createdAt", "desc"));
+    return onSnapshot(q, (snapshot) => {
+      setShowcaseSlides(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Error reading showcase slides:", error);
+    });
+  }, []);
+
+  // 6. Listen to Photos Gallery
+  useEffect(() => {
+    const q = query(collection(db, "photos"), orderBy("createdAt", "desc"));
+    return onSnapshot(q, (snapshot) => {
+      setPhotos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Error reading gallery photos:", error);
+    });
   }, []);
 
   return (
     <ErrorBoundary>
       <main>
-        {mode === "main" && <MainPortfolio onSwitchMode={() => setMode("photographer")} />}
-        {mode === "photographer" && <PhotographerPortfolio onBack={() => setMode("main")} onAdmin={() => setMode("admin")} />}
-        {mode === "admin" && <AdminPanel onBack={() => setMode("photographer")} />}
+        {mode === "main" && (
+          <MainPortfolio 
+            onSwitchMode={() => setMode("photographer")} 
+            onAdmin={() => setMode("admin")}
+            devSettings={devSettings}
+            devProjects={devProjects}
+          />
+        )}
+        {mode === "photographer" && (
+          <PhotographerPortfolio 
+            onBack={() => setMode("main")} 
+            onAdmin={() => setMode("admin")} 
+            photoSettings={photoSettings}
+            showcaseSlides={showcaseSlides}
+            awards={awards}
+            photos={photos}
+          />
+        )}
+        {mode === "admin" && (
+          <AdminPanel 
+            onBack={() => setMode("photographer")} 
+            devSettings={devSettings}
+            photoSettings={photoSettings}
+            devProjects={devProjects}
+            awards={awards}
+            showcaseSlides={showcaseSlides}
+            photos={photos}
+          />
+        )}
       </main>
     </ErrorBoundary>
   );

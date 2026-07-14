@@ -1,21 +1,11 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: photos
-    // Document ID: auto-generated
-    // Fields:
-    //   - src: string (required) - public URL
-    //   - title: string (required) - photo title
-    //   - category: string (required) - category (e.g. Portrait)
-    //   - event: string (required) - event type (e.g. Corporate)
-    //   - height: string (required) - display height class (e.g. h-[400px])
-    //   - createdAt: string (optional) - timestamp
-    //
-    // ===============================================================
+    
+    // Default-deny catch-all safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
     // Helper Functions
     function isAuthenticated() {
@@ -30,17 +20,77 @@ service cloud.firestore {
 
     // Domain Validators
     function isValidPhoto(data) {
-      return data.src is string && data.src.size() > 0 &&
-             data.title is string && data.title.size() > 0 &&
-             data.category is string && data.category.size() > 0 &&
-             data.event is string && data.event.size() > 0 &&
-             data.height is string && data.height.size() > 0;
+      return data.src is string && data.src.size() > 0 && data.src.size() <= 2048 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.category is string && data.category.size() > 0 && data.category.size() <= 100 &&
+             data.event is string && data.event.size() > 0 && data.event.size() <= 100 &&
+             data.height is string && data.height.size() > 0 && data.height.size() <= 50;
     }
 
+    function isValidDevProject(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.subtitle is string && data.subtitle.size() > 0 && data.subtitle.size() <= 200 &&
+             data.category is string && data.category.size() > 0 && data.category.size() <= 100 &&
+             data.description is string && data.description.size() > 0 && data.description.size() <= 2000 &&
+             data.tech is string && data.tech.size() >= 0 && data.tech.size() <= 1000 &&
+             data.repoUrl is string && data.repoUrl.size() >= 0 && data.repoUrl.size() <= 2048;
+    }
+
+    function isValidAward(data) {
+      return data.year is string && data.year.size() > 0 && data.year.size() <= 10 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.org is string && data.org.size() > 0 && data.org.size() <= 200 &&
+             data.desc is string && data.desc.size() > 0 && data.desc.size() <= 1000;
+    }
+
+    function isValidFeaturedShowcase(data) {
+      return data.src is string && data.src.size() > 0 && data.src.size() <= 2048 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.category is string && data.category.size() > 0 && data.category.size() <= 100 &&
+             data.desc is string && data.desc.size() > 0 && data.desc.size() <= 1000 &&
+             data.specs is string && data.specs.size() >= 0 && data.specs.size() <= 500;
+    }
+
+    function isValidSettings(data) {
+      return data.keys().size() > 0;
+    }
+
+    // Rules for Photos
     match /photos/{photoId} {
-      allow read: if true; // Publicly readable for the portfolio
+      allow read: if true;
       allow create: if isAdmin() && isValidPhoto(request.resource.data);
       allow update: if isAdmin() && isValidPhoto(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Rules for Dev Projects
+    match /dev_projects/{projectId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidDevProject(request.resource.data);
+      allow update: if isAdmin() && isValidDevProject(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Rules for Awards
+    match /awards/{awardId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidAward(request.resource.data);
+      allow update: if isAdmin() && isValidAward(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Rules for Featured Showcase
+    match /featured_showcase/{showcaseId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidFeaturedShowcase(request.resource.data);
+      allow update: if isAdmin() && isValidFeaturedShowcase(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Rules for Settings
+    match /settings/{settingsId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidSettings(request.resource.data);
       allow delete: if isAdmin();
     }
   }

@@ -13,12 +13,103 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
       },
       "required": ["src", "title", "category", "event", "height"]
+    },
+    "DevProject": {
+      "title": "DevProject",
+      "description": "A developer portfolio project",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "The title of the project" },
+        "subtitle": { "type": "string", "description": "The subtitle of the project" },
+        "category": { "type": "string", "description": "Category for filtering (e.g. Web Development)" },
+        "description": { "type": "string", "description": "Full description of the project" },
+        "tech": { "type": "string", "description": "Comma-separated list of technologies" },
+        "repoUrl": { "type": "string", "description": "URL of the project repository" },
+        "liveUrl": { "type": "string", "description": "URL of the live demo" },
+        "thumbnail": { "type": "string", "description": "URL of the thumbnail image" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["title", "subtitle", "category", "description", "tech", "repoUrl"]
+    },
+    "Award": {
+      "title": "Award",
+      "description": "A photography award or event achievement",
+      "type": "object",
+      "properties": {
+        "year": { "type": "string", "description": "Year of achievement" },
+        "title": { "type": "string", "description": "Award or Event title" },
+        "org": { "type": "string", "description": "Awarding organization or location" },
+        "desc": { "type": "string", "description": "Short description of the award or event details" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["year", "title", "org", "desc"]
+    },
+    "FeaturedShowcase": {
+      "title": "FeaturedShowcase",
+      "description": "Featured photography showcase slideshow slide",
+      "type": "object",
+      "properties": {
+        "src": { "type": "string", "description": "URL of the slide image" },
+        "title": { "type": "string", "description": "Slide title" },
+        "category": { "type": "string", "description": "Slide category" },
+        "desc": { "type": "string", "description": "Short slide description" },
+        "specs": { "type": "string", "description": "Camera/lens specs" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["src", "title", "category", "desc", "specs"]
+    },
+    "DeveloperSettings": {
+      "title": "DeveloperSettings",
+      "description": "Global settings and content for the Developer Portfolio",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the developer" },
+        "headline": { "type": "string", "description": "Hero section main title" },
+        "subheadline": { "type": "string", "description": "Hero section description" },
+        "avatarUrl": { "type": "string", "description": "Profile picture URL" },
+        "isAvailableForHire": { "type": "boolean", "description": "Shows the Available for Hire badge if true" },
+        "contactEmail": { "type": "string", "description": "Main contact email address" },
+        "githubUrl": { "type": "string", "description": "GitHub profile URL" },
+        "linkedinUrl": { "type": "string", "description": "LinkedIn profile URL" },
+        "instagramUrl": { "type": "string", "description": "Instagram profile URL" },
+        "skillsList": { "type": "string", "description": "Comma-separated list of technology skills" }
+      },
+      "required": ["name", "headline", "subheadline", "contactEmail"]
+    },
+    "PhotographySettings": {
+      "title": "PhotographySettings",
+      "description": "Global settings and content for the Photography Portfolio",
+      "type": "object",
+      "properties": {
+        "headline": { "type": "string", "description": "Hero section main title" },
+        "subheadline": { "type": "string", "description": "Hero section description" },
+        "avatarUrl": { "type": "string", "description": "Profile picture URL" },
+        "specsList": { "type": "string", "description": "Comma-separated camera/gear specs (e.g., LEICA M11, SUMMILUX 50MM)" },
+        "bookNowUrl": { "type": "string", "description": "Booking link" }
+      },
+      "required": ["headline", "subheadline"]
     }
   },
   "firestore": {
     "/photos/{photoId}": {
       "schema": "Photo",
-      "description": "Collection of photography images"
+      "description": "Collection of photography gallery images"
+    },
+    "/dev_projects/{projectId}": {
+      "schema": "DevProject",
+      "description": "Collection of developer portfolio projects"
+    },
+    "/awards/{awardId}": {
+      "schema": "Award",
+      "description": "Collection of photography awards and achievements"
+    },
+    "/featured_showcase/{showcaseId}": {
+      "schema": "FeaturedShowcase",
+      "description": "Collection of featured banner showcase items"
+    },
+    "/settings/{settingsId}": {
+      "schema": "DeveloperSettings",
+      "description": "Global settings for both Developer and Photography portfolios"
     }
   }
 }
