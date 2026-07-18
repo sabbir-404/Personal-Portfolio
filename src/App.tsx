@@ -2,58 +2,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { ArrowRight, Code, Camera, Mail, Github, Linkedin, Instagram, Aperture, Terminal, Layers, User, X, ExternalLink, Database, Cpu, Globe, Smartphone, Server, Upload, Trash2, LogIn, LogOut, Settings, ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import React, { useState, useMemo, ReactNode, useEffect, Component } from "react";
 import { cn } from "@/lib/utils";
-import { db } from "./firebase";
-import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, serverTimestamp, getDocFromServer } from "firebase/firestore";
-import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "firebase/auth";
-import { auth } from "./firebase";
 import { AdminPanel } from "./components/AdminPanel";
-
-// --- Firestore Error Handling ---
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: any[];
-  }
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
 
 // --- Error Boundary ---
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean, error: any }> {
@@ -70,15 +19,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   render() {
     const { hasError, error } = this.state;
     if (hasError) {
-      let displayMessage = "Something went wrong.";
-      try {
-        const parsed = JSON.parse(error.message);
-        if (parsed.error && parsed.operationType) {
-          displayMessage = `Database Error (${parsed.operationType}): ${parsed.error}. Please check security rules.`;
-        }
-      } catch (e) {
-        displayMessage = error.message || String(error);
-      }
+      const displayMessage = error?.message || "Something went wrong.";
 
       return (
         <div className="min-h-screen bg-black text-white flex items-center justify-center p-12 text-center">
@@ -109,6 +50,16 @@ interface Project {
   category: string;
   className?: string;
   content?: ReactNode;
+}
+
+// --- API Helper ---
+async function apiFetch(url: string, options?: RequestInit) {
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Request failed" }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
 }
 
 // --- Components ---
@@ -382,7 +333,7 @@ const MainPortfolio = ({ onSwitchMode, onAdmin, devSettings, devProjects }: Main
         description: p.description,
         tech: p.tech ? p.tech.split(",").map((s: string) => s.trim()) : [],
         techIcons: p.tech ? p.tech.split(",").slice(0, 3).map((t: string) => getTechIcon(t)) : [Code],
-        repoUrl: p.repoUrl || "#",
+        repoUrl: p.repo_url || p.repoUrl || "#",
         className: idx % 3 === 0 ? "md:col-span-2" : "",
         content: p.thumbnail ? (
           <img src={p.thumbnail} alt={p.title} className="absolute inset-0 w-full h-full object-cover opacity-15 group-hover:opacity-25 transition-all duration-500" referrerPolicy="no-referrer" />
@@ -712,28 +663,28 @@ const FeaturedImagesBanner = ({ slides }: { slides: any[] }) => {
         src: "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?q=80&w=1600&auto=format&fit=crop",
         title: "Alps at Midnight",
         category: "Landscape",
-        desc: "A long-exposure capture of alpine peaks standing proud under a stellar, star-studded sky.",
+        description: "A long-exposure capture of alpine peaks standing proud under a stellar, star-studded sky.",
         specs: "50mm · f/1.8 · 25s · ISO 1600"
       },
       {
         src: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?q=80&w=1600&auto=format&fit=crop",
         title: "Neon Reflections",
         category: "Urban / Night",
-        desc: "Rainy streets of Tokyo alive with high-contrast reflection of cyberpunk-inspired neon signage.",
+        description: "Rainy streets of Tokyo alive with high-contrast reflection of cyberpunk-inspired neon signage.",
         specs: "35mm · f/1.4 · 1/80s · ISO 400"
       },
       {
         src: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=1600&auto=format&fit=crop",
         title: "Chiaroscuro Silhouette",
         category: "Portrait",
-        desc: "Studio portraiture emphasizing high contrast shadows and clean emotive highlights.",
+        description: "Studio portraiture emphasizing high contrast shadows and clean emotive highlights.",
         specs: "85mm · f/1.2 · 1/200s · ISO 100"
       },
       {
         src: "https://images.unsplash.com/photo-1505118380757-91f5f5632de0?q=80&w=1600&auto=format&fit=crop",
         title: "The Turquoise Abyss",
         category: "Nature",
-        desc: "Stunning overhead drone photograph capturing the explosive energy of rolling waves crashing on basalt rock.",
+        description: "Stunning overhead drone photograph capturing the explosive energy of rolling waves crashing on basalt rock.",
         specs: "24mm · f/4.0 · 1/1000s · ISO 200"
       }
     ];
@@ -755,6 +706,9 @@ const FeaturedImagesBanner = ({ slides }: { slides: any[] }) => {
   const handleNext = () => {
     setCurrentIndex((prev) => (prev + 1) % featuredImages.length);
   };
+
+  // Map PostgreSQL column names to display (desc -> description)
+  const getDesc = (slide: any) => slide.desc || slide.description || "";
 
   return (
     <div className="w-full max-w-7xl mx-auto px-6 md:px-12 mb-16 mt-8">
@@ -811,7 +765,7 @@ const FeaturedImagesBanner = ({ slides }: { slides: any[] }) => {
                   {featuredImages[currentIndex].title}
                 </h3>
                 <p className="text-xs md:text-sm text-slate-300 font-light tracking-wide line-clamp-2 md:line-clamp-none">
-                  {featuredImages[currentIndex].desc}
+                  {getDesc(featuredImages[currentIndex])}
                 </p>
               </div>
 
@@ -911,7 +865,8 @@ const PhotographerPortfolio = ({
 
   const timelineAwards = useMemo(() => {
     if (awards && awards.length > 0) {
-      return awards;
+      // Map PostgreSQL column name 'description' to display field 'desc'
+      return awards.map(a => ({ ...a, desc: a.desc || a.description }));
     }
     return [
       { year: "2025", title: "Best Portrait Photographer", org: "National Arts Awards", desc: "Awarded for the 'Faces of the City' series." },
@@ -1123,67 +1078,40 @@ export default function App() {
   const [showcaseSlides, setShowcaseSlides] = useState<any[]>([]);
   const [photos, setPhotos] = useState<any[]>([]);
 
-  // 1. Listen to Developer Settings
+  // Fetch all data from PostgreSQL REST API
+  const fetchData = async () => {
+    try {
+      const [devSet, photoSet, projects, awardsList, showcase, photosList] = await Promise.all([
+        apiFetch("/api/settings/developer"),
+        apiFetch("/api/settings/photography"),
+        apiFetch("/api/dev-projects"),
+        apiFetch("/api/awards"),
+        apiFetch("/api/featured-showcase"),
+        apiFetch("/api/photos"),
+      ]);
+
+      setDevSettings(devSet);
+      setPhotoSettings(photoSet);
+      setDevProjects(projects);
+      setAwards(awardsList);
+      setShowcaseSlides(showcase);
+      setPhotos(photosList);
+    } catch (err) {
+      console.error("Failed to fetch portfolio data:", err);
+    }
+  };
+
+  // Initial data fetch
   useEffect(() => {
-    return onSnapshot(doc(db, "settings", "developer"), (docSnap) => {
-      if (docSnap.exists()) {
-        setDevSettings(docSnap.data());
-      }
-    }, (error) => {
-      console.error("Error reading developer settings:", error);
-    });
+    fetchData();
   }, []);
 
-  // 2. Listen to Photography Settings
+  // Refresh data when returning from admin mode
   useEffect(() => {
-    return onSnapshot(doc(db, "settings", "photography"), (docSnap) => {
-      if (docSnap.exists()) {
-        setPhotoSettings(docSnap.data());
-      }
-    }, (error) => {
-      console.error("Error reading photography settings:", error);
-    });
-  }, []);
-
-  // 3. Listen to Developer Projects
-  useEffect(() => {
-    const q = query(collection(db, "dev_projects"), orderBy("createdAt", "desc"));
-    return onSnapshot(q, (snapshot) => {
-      setDevProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.error("Error reading dev projects:", error);
-    });
-  }, []);
-
-  // 4. Listen to Awards
-  useEffect(() => {
-    const q = query(collection(db, "awards"), orderBy("createdAt", "desc"));
-    return onSnapshot(q, (snapshot) => {
-      setAwards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.error("Error reading awards:", error);
-    });
-  }, []);
-
-  // 5. Listen to Showcase
-  useEffect(() => {
-    const q = query(collection(db, "featured_showcase"), orderBy("createdAt", "desc"));
-    return onSnapshot(q, (snapshot) => {
-      setShowcaseSlides(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.error("Error reading showcase slides:", error);
-    });
-  }, []);
-
-  // 6. Listen to Photos Gallery
-  useEffect(() => {
-    const q = query(collection(db, "photos"), orderBy("createdAt", "desc"));
-    return onSnapshot(q, (snapshot) => {
-      setPhotos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.error("Error reading gallery photos:", error);
-    });
-  }, []);
+    if (mode !== "admin") {
+      fetchData();
+    }
+  }, [mode]);
 
   return (
     <ErrorBoundary>

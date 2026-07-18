@@ -6,20 +6,6 @@ import {
   LogIn, LogOut, Settings, Award, Image, Sliders, FileText, 
   Save, Check, Plus, Loader2, Link, ExternalLink, Sparkles, User
 } from "lucide-react";
-import { db, auth } from "../firebase";
-import { 
-  collection, addDoc, deleteDoc, doc, setDoc, serverTimestamp 
-} from "firebase/firestore";
-import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "firebase/auth";
-
-// --- Firestore Operations Type ---
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  GET = 'get',
-  WRITE = 'write',
-}
 
 interface AdminPanelProps {
   onBack: () => void;
@@ -29,6 +15,42 @@ interface AdminPanelProps {
   awards: any[];
   showcaseSlides: any[];
   photos: any[];
+}
+
+// --- Auth Token Helper ---
+function getToken(): string | null {
+  return localStorage.getItem("portfolio_admin_token");
+}
+
+function setToken(token: string) {
+  localStorage.setItem("portfolio_admin_token", token);
+}
+
+function clearToken() {
+  localStorage.removeItem("portfolio_admin_token");
+}
+
+async function authFetch(url: string, options: RequestInit = {}) {
+  const token = getToken();
+  const headers: any = {
+    ...options.headers,
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401) {
+    clearToken();
+    throw new Error("Session expired. Please log in again.");
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Request failed" }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -45,6 +67,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [activeTab, setActiveTab] = useState<"dev-settings" | "dev-projects" | "photo-settings" | "photo-gallery" | "showcase" | "awards">("dev-settings");
   const [isSaving, setIsSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+
+  // Login form
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
 
   // Form States
   const [devForm, setDevForm] = useState({
@@ -109,20 +136,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [showcaseFile, setShowcaseFile] = useState<File | null>(null);
   const [galleryFile, setGalleryFile] = useState<File | null>(null);
 
-  // Authentication Monitor
+  // Check if already authenticated on mount
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setIsLoggedIn(user.email === "SABBIRISLAMALVI070800@gmail.com");
-      } else {
-        setIsLoggedIn(false);
-      }
+    const token = getToken();
+    if (token) {
+      fetch("/api/auth/verify", {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => {
+          if (res.ok) {
+            setIsLoggedIn(true);
+          } else {
+            clearToken();
+          }
+          setIsAuthReady(true);
+        })
+        .catch(() => {
+          clearToken();
+          setIsAuthReady(true);
+        });
+    } else {
       setIsAuthReady(true);
-    });
-    return () => unsubscribe();
+    }
   }, []);
 
-  // Initialize Developer Form with Firestore settings
+  // Initialize Developer Form with settings
   useEffect(() => {
     if (devSettings) {
       setDevForm({
@@ -140,7 +178,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }, [devSettings]);
 
-  // Initialize Photography Form with Firestore settings
+  // Initialize Photography Form with settings
   useEffect(() => {
     if (photoSettings) {
       setPhotoForm({
@@ -153,27 +191,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }, [photoSettings]);
 
-  const handleLogin = async () => {
-    const provider = new GoogleAuthProvider();
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError("");
     try {
-      const result = await signInWithPopup(auth, provider);
-      const email = result.user.email;
-      if (email !== "SABBIRISLAMALVI070800@gmail.com") {
-        await signOut(auth);
-        alert(`Access Denied: ${email} is not authorized to access this panel.`);
-      }
+      const data = await authFetch("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      });
+      setToken(data.token);
+      setIsLoggedIn(true);
     } catch (err: any) {
-      console.error("Firebase Auth Error:", err);
-      alert(`Failed to authenticate: ${err.message}`);
+      setLoginError(err.message || "Login failed");
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-    } catch (err) {
-      console.error("Logout Error:", err);
-    }
+  const handleLogout = () => {
+    clearToken();
+    setIsLoggedIn(false);
   };
 
   // Reusable file uploader using current express API
@@ -208,10 +243,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         finalAvatarUrl = await uploadImage(devAvatarFile);
       }
 
-      await setDoc(doc(db, "settings", "developer"), {
-        ...devForm,
-        avatarUrl: finalAvatarUrl,
-        updatedAt: serverTimestamp()
+      await authFetch("/api/settings/developer", {
+        method: "PUT",
+        body: JSON.stringify({
+          ...devForm,
+          avatarUrl: finalAvatarUrl,
+        }),
       });
 
       setDevForm(prev => ({ ...prev, avatarUrl: finalAvatarUrl }));
@@ -237,10 +274,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         finalAvatarUrl = await uploadImage(photoAvatarFile);
       }
 
-      await setDoc(doc(db, "settings", "photography"), {
-        ...photoForm,
-        avatarUrl: finalAvatarUrl,
-        updatedAt: serverTimestamp()
+      await authFetch("/api/settings/photography", {
+        method: "PUT",
+        body: JSON.stringify({
+          ...photoForm,
+          avatarUrl: finalAvatarUrl,
+        }),
       });
 
       setPhotoForm(prev => ({ ...prev, avatarUrl: finalAvatarUrl }));
@@ -266,10 +305,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         finalThumbnail = await uploadImage(projectThumbFile);
       }
 
-      await addDoc(collection(db, "dev_projects"), {
-        ...projectForm,
-        thumbnail: finalThumbnail,
-        createdAt: serverTimestamp()
+      await authFetch("/api/dev-projects", {
+        method: "POST",
+        body: JSON.stringify({
+          title: projectForm.title,
+          subtitle: projectForm.subtitle,
+          category: projectForm.category,
+          description: projectForm.description,
+          tech: projectForm.tech,
+          repo_url: projectForm.repoUrl,
+          live_url: projectForm.liveUrl,
+          thumbnail: finalThumbnail,
+        }),
       });
 
       setProjectForm({
@@ -292,10 +339,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  const handleDeleteProject = async (id: string) => {
+  const handleDeleteProject = async (id: number) => {
     if (!confirm("Are you sure you want to delete this project?")) return;
     try {
-      await deleteDoc(doc(db, "dev_projects", id));
+      await authFetch(`/api/dev-projects/${id}`, { method: "DELETE" });
       alert("Project deleted.");
     } catch (err: any) {
       alert(`Failed to delete project: ${err.message}`);
@@ -307,9 +354,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     e.preventDefault();
     setIsSaving(true);
     try {
-      await addDoc(collection(db, "awards"), {
-        ...awardForm,
-        createdAt: serverTimestamp()
+      await authFetch("/api/awards", {
+        method: "POST",
+        body: JSON.stringify({
+          year: awardForm.year,
+          title: awardForm.title,
+          org: awardForm.org,
+          description: awardForm.desc,
+        }),
       });
       setAwardForm({ year: "", title: "", org: "", desc: "" });
       alert("Award / Achievement added successfully!");
@@ -320,10 +372,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  const handleDeleteAward = async (id: string) => {
+  const handleDeleteAward = async (id: number) => {
     if (!confirm("Are you sure you want to delete this achievement?")) return;
     try {
-      await deleteDoc(doc(db, "awards", id));
+      await authFetch(`/api/awards/${id}`, { method: "DELETE" });
       alert("Achievement deleted.");
     } catch (err: any) {
       alert(`Failed to delete: ${err.message}`);
@@ -346,10 +398,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         finalSrc = await uploadImage(showcaseFile);
       }
 
-      await addDoc(collection(db, "featured_showcase"), {
-        ...showcaseForm,
-        src: finalSrc,
-        createdAt: serverTimestamp()
+      await authFetch("/api/featured-showcase", {
+        method: "POST",
+        body: JSON.stringify({
+          src: finalSrc,
+          title: showcaseForm.title,
+          category: showcaseForm.category,
+          description: showcaseForm.desc,
+          specs: showcaseForm.specs,
+        }),
       });
 
       setShowcaseForm({
@@ -369,10 +426,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  const handleDeleteShowcase = async (id: string) => {
+  const handleDeleteShowcase = async (id: number) => {
     if (!confirm("Are you sure you want to delete this showcase slide?")) return;
     try {
-      await deleteDoc(doc(db, "featured_showcase", id));
+      await authFetch(`/api/featured-showcase/${id}`, { method: "DELETE" });
       alert("Showcase slide deleted.");
     } catch (err: any) {
       alert(`Failed to delete: ${err.message}`);
@@ -395,13 +452,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         finalSrc = await uploadImage(galleryFile);
       }
 
-      await addDoc(collection(db, "photos"), {
-        src: finalSrc,
-        title: galleryForm.title,
-        category: galleryForm.category || galleryForm.event,
-        event: galleryForm.event,
-        height: galleryForm.height,
-        createdAt: serverTimestamp()
+      await authFetch("/api/photos", {
+        method: "POST",
+        body: JSON.stringify({
+          src: finalSrc,
+          title: galleryForm.title,
+          category: galleryForm.category || galleryForm.event,
+          event: galleryForm.event,
+          height: galleryForm.height,
+        }),
       });
 
       setGalleryForm({
@@ -421,19 +480,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  const handleDeleteGalleryPhoto = async (id: string) => {
+  const handleDeleteGalleryPhoto = async (id: number) => {
     if (!confirm("Are you sure you want to delete this photo?")) return;
     try {
-      await deleteDoc(doc(db, "photos", id));
+      await authFetch(`/api/photos/${id}`, { method: "DELETE" });
       alert("Photo deleted.");
     } catch (err: any) {
       alert(`Failed to delete: ${err.message}`);
     }
-  };
-
-  // Drag and Drop Helper for inputs
-  const setupDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
   };
 
   if (!isAuthReady) {
@@ -457,28 +511,58 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <Settings className="w-8 h-8" />
             </div>
             <h1 className="text-2xl font-bold text-slate-100">Admin Control Panel</h1>
-            <p className="text-slate-500 text-sm mt-2 text-center">Authorized Sign-in for SABBIRISLAMALVI070800@gmail.com</p>
+            <p className="text-slate-500 text-sm mt-2 text-center">Sign in with your admin credentials</p>
           </div>
           
-          <div className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Email</label>
+              <input 
+                type="email"
+                value={loginEmail}
+                onChange={e => setLoginEmail(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-slate-100 focus:outline-none focus:border-cyan-500/50"
+                placeholder="admin@example.com"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Password</label>
+              <input 
+                type="password"
+                value={loginPassword}
+                onChange={e => setLoginPassword(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-slate-100 focus:outline-none focus:border-cyan-500/50"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+
+            {loginError && (
+              <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-xl">
+                {loginError}
+              </div>
+            )}
+
             <button 
-              onClick={handleLogin} 
+              type="submit"
               className="w-full flex items-center justify-center gap-2 bg-cyan-500 text-black hover:bg-cyan-400 font-medium py-3 px-6 rounded-full transition active:scale-95 cursor-pointer"
             >
-              <LogIn className="w-4 h-4" /> Sign in with Google
+              <LogIn className="w-4 h-4" /> Sign In
             </button>
             <button 
+              type="button"
               onClick={onBack} 
               className="w-full text-sm text-slate-500 hover:text-slate-300 transition-colors mt-2"
             >
               Back to Portfolio
             </button>
-          </div>
+          </form>
           
           <div className="mt-8 pt-6 border-t border-white/5">
             <p className="text-[10px] text-slate-600 uppercase tracking-widest text-center leading-relaxed">
               Only authorized administrators can access this panel. <br/>
-              All settings are verified against secure Firestore rules.
+              All data is stored securely on your TrueNAS PostgreSQL.
             </p>
           </div>
         </motion.div>
@@ -566,7 +650,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         <div className="pt-6 border-t border-white/5 space-y-4">
           <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 rounded-xl text-emerald-400 text-xs">
             <Database className="w-4 h-4 shrink-0" />
-            <span className="font-mono">Live Firestore DB</span>
+            <span className="font-mono">TrueNAS PostgreSQL</span>
           </div>
           <button 
             onClick={onBack}
@@ -591,7 +675,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <Loader2 className="w-12 h-12 text-cyan-400 animate-spin mb-4" />
             <h3 className="text-xl font-semibold text-white">Saving Changes</h3>
             <p className="text-slate-400 text-sm mt-2 max-w-sm">
-              {uploadProgress || "Writing safe transaction data to database..."}
+              {uploadProgress || "Writing data to TrueNAS PostgreSQL..."}
             </p>
           </div>
         )}
@@ -939,11 +1023,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           {project.tech}
                         </span>
                         <div className="flex gap-2">
-                          <a href={project.repoUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-white/5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition">
+                          <a href={project.repo_url || project.repoUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-white/5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition">
                             <Github className="w-3.5 h-3.5" />
                           </a>
-                          {project.liveUrl && (
-                            <a href={project.liveUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-white/5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition">
+                          {(project.live_url || project.liveUrl) && (
+                            <a href={project.live_url || project.liveUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-white/5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition">
                               <ExternalLink className="w-3.5 h-3.5" />
                             </a>
                           )}
@@ -954,7 +1038,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                   {devProjects.length === 0 && (
                     <div className="col-span-full py-12 text-center border border-dashed border-white/5 rounded-3xl text-slate-500 text-sm">
-                      No dynamic projects stored in Firestore yet. Currently falling back to static presentation.
+                      No dynamic projects stored yet. Currently falling back to static presentation.
                     </div>
                   )}
                 </div>
@@ -1189,7 +1273,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                   {photos.length === 0 && (
                     <div className="col-span-full py-12 text-center border border-dashed border-white/5 rounded-3xl text-slate-500 text-sm">
-                      No gallery photos in Firestore. Falling back to default showcase.
+                      No gallery photos stored. Falling back to default showcase.
                     </div>
                   )}
                 </div>
@@ -1308,7 +1392,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             {slide.category}
                           </span>
                           <h4 className="text-lg font-semibold text-white leading-tight">{slide.title}</h4>
-                          <p className="text-xs text-slate-400 mt-2 line-clamp-2 leading-relaxed">{slide.desc}</p>
+                          <p className="text-xs text-slate-400 mt-2 line-clamp-2 leading-relaxed">{slide.desc || slide.description}</p>
                         </div>
                         <div className="border-t border-white/5 pt-4 mt-4 flex items-center justify-between text-[10px] font-mono text-slate-500">
                           <span>{slide.specs}</span>
@@ -1400,7 +1484,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <div className="flex-1">
                         <h4 className="text-lg font-bold text-white leading-tight">{item.title}</h4>
                         <p className="text-xs text-slate-500 uppercase tracking-wider mt-1.5">{item.org}</p>
-                        <p className="text-slate-400 text-sm mt-2 font-light leading-relaxed">{item.desc}</p>
+                        <p className="text-slate-400 text-sm mt-2 font-light leading-relaxed">{item.desc || item.description}</p>
                       </div>
                       <button 
                         onClick={() => handleDeleteAward(item.id)}
